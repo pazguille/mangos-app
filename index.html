@@ -114,13 +114,16 @@
             <div class="tab-content active" id="voice-tab">
                 <div class="voice-nexus">
                     <div id="voiceStatus" class="subtitle" style="text-transform: uppercase;"></div>
+                        <div id="voiceOrb" class="voiceOrb-container hidden">
+                            <video class="voiceOrb-video" src="src/assets/orbe.mp4" autoplay muted loop playsinline></video>
+                        </div>
                         <button id="startVoiceBtn" class="btn-voice-main">
                             <div class="blob-container">
                                 <div class="blob"></div>
                                 <div class="blob"></div>
                                 <div class="blob"></div>
                             </div>
-                            <i data-lucide="mic" style="width: 40px; height: 40px; z-index: 10;"></i>
+                            <i data-lucide="mic" style="width: 28px; height: 28px; z-index: 10;"></i>
                             <div class="btn-spinner"></div>
                         </button>
                     <button id="stopVoiceBtn" class="hidden">

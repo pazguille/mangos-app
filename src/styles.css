@@ -211,6 +211,9 @@ textarea {
     align-items: center;
     gap: 16px;
     padding: 20px 0;
+    position: relative;
+    min-height: 180px; /* Ensure space for overlapping elements */
+    justify-content: center;
 }
 
 @keyframes ring-pulse {
@@ -244,10 +247,47 @@ textarea {
     transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     color: var(--text-main);
     box-shadow: var(--shadow-md);
-    position: relative;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(1);
     cursor: pointer;
     overflow: hidden; /* Mantener todo adentro */
     -webkit-tap-highlight-color: transparent;
+    opacity: 1;
+    display: flex;
+    z-index: 2;
+}
+
+.btn-voice-main.hidden {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+    pointer-events: none;
+}
+
+.voiceOrb-container {
+    width: 100px;
+    height: 100px;
+    overflow: hidden;
+    border-radius: 100%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(1);
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity: 1;
+    z-index: 3;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: var(--shadow-md);
+}
+
+.voiceOrb-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scale(1.5);
+    pointer-events: none;
 }
 
 .btn-neo.loading,
@@ -427,7 +467,7 @@ textarea {
     width: 44px;
     height: 44px;
     border-radius: 50%;
-    border: 1px solid var(--border);
+    border: none;
     background: #fff;
     cursor: pointer;
     display: flex;

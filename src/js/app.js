@@ -81,6 +81,7 @@ class CashFlowApp {
 
         // Voice Input
         document.getElementById('startVoiceBtn').addEventListener('click', () => this._handleVoiceStart());
+        document.getElementById('voiceOrb').addEventListener('click', () => this._handleVoiceStart());
         document.getElementById('stopVoiceBtn').addEventListener('click', () => this._handleVoiceStop());
 
 

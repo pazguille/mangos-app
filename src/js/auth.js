@@ -9,32 +9,34 @@ export class GoogleAuthManager {
         this.accessToken = localStorage.getItem('cashflow_access_token');
         this.tokenExpiry = localStorage.getItem('cashflow_token_expiry');
         this.isInitialized = false;
+        this.tokenClient = null;
     }
 
     async initialize() {
         return new Promise((resolve) => {
             try {
-                // 1. Revisar si volvemos de una redirección con un token en el hash
-                this._parseHashToken();
-
-                // 2. Esperar a que google esté disponible
+                // GIS Token Model Initialization
                 if (typeof google === 'undefined' || !google.accounts) {
                     console.error('❌ google.accounts no disponible');
                     resolve(false);
                     return;
                 }
 
-                // Inicializar Google Identity Services CON SCOPES para OAuth2
-                google.accounts.id.initialize({
-                    client_id: config.googleClientId,
-                    ux_mode: 'redirect', // Forzar modo redirección
-                    callback: (response) => this._handleCredentialResponse(response),
-                    // Scopes para acceder a Google Sheets
-                    scope: 'https://www.googleapis.com/auth/spreadsheets'
+                // Initialize Token Client
+                this.tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: this.CLIENT_ID,
+                    scope: 'https://www.googleapis.com/auth/spreadsheets openid profile email',
+                    callback: (response) => this._handleTokenResponse(response),
                 });
 
                 this.isInitialized = true;
-                console.log('✅ Google Identity Services inicializado');
+                console.log('✅ Google Identity Services (Token Model) inicializado');
+
+                // Si tenemos un token, verificar si está por expirar para refrescarlo
+                if (this.accessToken && this.tokenExpiry) {
+                    this._checkAndRefreshIfNeeded();
+                }
+
                 resolve(true);
 
             } catch (error) {
@@ -44,36 +46,16 @@ export class GoogleAuthManager {
         });
     }
 
-    _handleCredentialResponse(response) {
-        console.log('📝 ID Token recibido, solicitando Access Token vía redirección...');
-
-        // Extraer nombre del ID Token (JWT)
-        try {
-            const base64Url = response.credential.split('.')[1];
-            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-            const jsonPayload = decodeURIComponent(
-                atob(base64).split('').map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
-            );
-            const decoded = JSON.parse(jsonPayload);
-
-            if (decoded.given_name || decoded.name) {
-                const name = decoded.given_name || decoded.name.split(' ')[0];
-                localStorage.setItem('cashflow_user_name', name);
-                console.log(`👤 Usuario detectado: ${name}`);
-            }
-        } catch (e) {
-            console.warn('⚠️ No se pudo extraer el nombre del ID Token');
-        }
-
-        this.requestAccessToken();
-    }
-
     _handleTokenResponse(response) {
-        console.log('📝 Access Token recibido (para APIs):', response.access_token?.substring(0, 20) + '...');
+        console.log('📝 Token response recibida:', response.access_token ? 'OK' : 'Error');
 
         if (response.error !== undefined) {
             console.error('❌ Error obteniendo token:', response.error);
-            showToast('Error en autenticación. Intenta de nuevo.', 'error');
+            if (response.error === 'immediate_failed') {
+                console.warn('⚠️ Refresh silencioso falló, se requiere interacción del usuario');
+            } else {
+                showToast('Error en autenticación. Intenta de nuevo.', 'error');
+            }
             return;
         }
 
@@ -83,73 +65,20 @@ export class GoogleAuthManager {
 
         // Calcular expiry (típicamente 3600 segundos = 1 hora)
         const expiry = new Date();
-        expiry.setSeconds(expiry.getSeconds() + (response.expires_in || 3600));
+        const expiresIn = response.expires_in || 3600;
+        expiry.setSeconds(expiry.getSeconds() + expiresIn);
         this.tokenExpiry = expiry.toISOString();
         localStorage.setItem('cashflow_token_expiry', this.tokenExpiry);
 
-        // Extraer email del token (si está disponible)
-        try {
-            const base64Url = this.accessToken.split('.')[1];
-            if (base64Url) {
-                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-                const jsonPayload = decodeURIComponent(
-                    atob(base64).split('').map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
-                );
-                const decoded = JSON.parse(jsonPayload);
-                if (decoded.email) {
-                    localStorage.setItem('cashflow_user_email', decoded.email);
-                    console.log(`✅ Autenticado como: ${decoded.email}`);
-                }
-            }
-        } catch (e) {
-            console.warn('⚠️ No se pudo extraer email del token (es normal con access tokens)');
+        console.log(`✅ Token actualizado. Expira en: ${this.tokenExpiry}`);
+
+        // Intentar obtener info del usuario si no la tenemos
+        if (!localStorage.getItem('cashflow_user_name')) {
+            this._fetchUserInfo(this.accessToken);
         }
 
-        // showToast(`✅ Autenticado correctamente`, 'success');
         updateAuthUI();
         if (window.app) window.app._updateGreeting();
-    }
-
-    _parseHashToken() {
-        const hash = window.location.hash;
-        if (hash) {
-            const params = new URLSearchParams(hash.substring(1));
-
-            if (params.has('error')) {
-                console.error('❌ Error de Google Auth:', params.get('error'));
-                showToast(`Error: ${params.get('error')}`, 'error');
-                window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
-                return;
-            }
-
-            if (params.has('access_token')) {
-                console.log('📝 Detectado token en URL hash (retorno de redirect)');
-                const accessToken = params.get('access_token');
-                const expiresIn = params.get('expires_in');
-
-                this.accessToken = accessToken;
-                localStorage.setItem('cashflow_access_token', this.accessToken);
-
-                const expiry = new Date();
-                expiry.setSeconds(expiry.getSeconds() + (parseInt(expiresIn) || 3600));
-                this.tokenExpiry = expiry.toISOString();
-                localStorage.setItem('cashflow_token_expiry', this.tokenExpiry);
-
-                // Limpiar la URL para que no quede el token ahí
-                window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
-
-                // showToast(`✅ Autenticado correctamente`, 'success');
-
-                // Intentar obtener el nombre del usuario
-                this._fetchUserInfo(accessToken);
-
-                // Actualizar UI inmediatamente
-                setTimeout(() => {
-                    updateAuthUI();
-                    if (window.app) window.app._updateGreeting();
-                }, 100);
-            }
-        }
     }
 
     async _fetchUserInfo(token) {
@@ -157,11 +86,13 @@ export class GoogleAuthManager {
             const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            if (!response.ok) throw new Error('Error fetching user info');
             const data = await response.json();
             if (data.given_name || data.name) {
                 const name = data.given_name || data.name.split(' ')[0];
                 localStorage.setItem('cashflow_user_name', name);
-                console.log(`👤 Usuario obtenido de userinfo: ${name}`);
+                localStorage.setItem('cashflow_user_email', data.email);
+                console.log(`👤 Usuario obtenido: ${name} (${data.email})`);
                 if (window.app) window.app._updateGreeting();
             }
         } catch (e) {
@@ -169,36 +100,50 @@ export class GoogleAuthManager {
         }
     }
 
+    _checkAndRefreshIfNeeded() {
+        if (!this.tokenExpiry) return;
 
-    requestAccessToken() {
-        console.log('🔄 Solicitando Access Token vía redirección...');
-        const scopes = 'https://www.googleapis.com/auth/spreadsheets openid profile email';
-        // Normalizar redirectUri para que sea el origen + /
-        const redirectUri = window.location.origin;
-        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${this.CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent(scopes)}&prompt=consent`;
+        const expiry = new Date(this.tokenExpiry);
+        const now = new Date();
+        const diffMinutes = (expiry - now) / 1000 / 60;
 
-        window.location.href = authUrl;
+        // Si falta menos de 5 minutos, refrescar
+        if (diffMinutes < 5) {
+            console.log('🔄 Token por expirar o expirado, intentando refresh silencioso...');
+            this.requestAccessToken(true);
+        }
+
+        // Programar siguiente chequeo en 1 minuto
+        setTimeout(() => this._checkAndRefreshIfNeeded(), 60000);
+    }
+
+    requestAccessToken(silent = false) {
+        if (!this.tokenClient) {
+            console.error('❌ TokenClient no inicializado');
+            return;
+        }
+
+        console.log(`🔄 Solicitando Access Token (${silent ? 'silencioso' : 'con prompt'})...`);
+
+        // El modo silencioso usa prompt: '' (GIS Token Model no tiene un "silent: true" explícito como tal en el request)
+        // Pero podemos usar requestAccessToken() y si el usuario ya está logueado en Google, suele ser invisible
+        // a menos que se requiera consentimiento.
+        this.tokenClient.requestAccessToken({
+            prompt: silent ? '' : 'consent'
+        });
     }
 
     signIn() {
-        // Con GIS, se usa el botón HTML directo
-        // Esta función es para compatibilidad
-        console.log('signIn() - Usa el botón HTML en su lugar');
+        this.requestAccessToken(false);
     }
 
     async signOut() {
         try {
-            if (typeof google !== 'undefined' && google.accounts) {
-                google.accounts.id.disableAutoSelect();
-            }
-
             // Revocar el access token
             if (this.accessToken) {
-                fetch('https://oauth2.googleapis.com/revoke', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `token=${this.accessToken}`
-                }).catch(e => console.warn('Error revocando token:', e));
+                google.accounts.oauth2.revoke(this.accessToken, () => {
+                    console.log('✅ Token revocado');
+                });
             }
 
             localStorage.removeItem('cashflow_access_token');
@@ -223,15 +168,24 @@ export class GoogleAuthManager {
         if (this.tokenExpiry) {
             const expiry = new Date(this.tokenExpiry);
             if (new Date() > expiry) {
-                localStorage.removeItem('cashflow_access_token');
-                this.accessToken = null;
-                return false;
+                // Intentar refresh silencioso
+                this.requestAccessToken(true);
+                return false; // Retornamos false mientras se refresca
             }
         }
         return true;
     }
 
     getAccessToken() {
+        // Antes de devolver, chequear si necesita refresh
+        if (this.tokenExpiry) {
+            const expiry = new Date(this.tokenExpiry);
+            if (new Date() > expiry) {
+                console.warn('⚠️ getAccessToken: Token expirado, solicitando refresh...');
+                this.requestAccessToken(true);
+                return null;
+            }
+        }
         return this.accessToken;
     }
 

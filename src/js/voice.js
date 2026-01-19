@@ -150,14 +150,32 @@ export class VoiceRecorder {
     _updateUI(state) {
         const statusEl = document.getElementById('voiceStatus');
         const container = document.querySelector('.voice-nexus');
+        const startBtn = document.getElementById('startVoiceBtn');
+        const orb = document.getElementById('voiceOrb');
+        const orbVideo = orb ? orb.querySelector('video') : null;
 
         if (state === 'recording') {
             statusEl.textContent = '';
             container.classList.add('recording');
+
+            // Toggle visibility
+            startBtn.classList.add('hidden');
+            orb.classList.remove('hidden');
+            if (orbVideo) orbVideo.play().catch(e => console.error("Error playing orb video:", e));
+
             if (window.navigator.vibrate) window.navigator.vibrate(40);
         } else if (state === 'stopped' || state === 'error') {
             statusEl.textContent = state === 'error' ? 'ERROR EN AUDIO' : '';
             container.classList.remove('recording');
+
+            // Toggle visibility back
+            startBtn.classList.remove('hidden');
+            orb.classList.add('hidden');
+            if (orbVideo) {
+                orbVideo.pause();
+                orbVideo.currentTime = 0;
+            }
+
             if (state === 'stopped' && window.navigator.vibrate) window.navigator.vibrate([20, 20]);
         }
     }
