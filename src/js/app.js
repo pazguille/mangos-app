@@ -1,3 +1,10 @@
+import { config } from './config.js';
+import { authManager, initializeAuth, updateAuthUI } from './auth.js';
+import { getGeminiProcessor } from './gemini.js';
+import { getSheetsManager } from './sheets.js';
+import { voiceRecorder, initVoiceRecorder } from './voice.js';
+import { showToast, showSpinner } from './utils.js';
+
 // Main Application Logic
 class CashFlowApp {
     constructor() {
@@ -6,7 +13,7 @@ class CashFlowApp {
         this.init();
     }
 
-    init() {
+    async init() {
         this._setupEventListeners();
         this._checkConfiguration();
         this._updateGreeting();
@@ -18,6 +25,34 @@ class CashFlowApp {
 
         // Register Service Worker for PWA
         this._registerServiceWorker();
+
+        // Initialize Google Auth
+        await this._initGoogleAuth();
+
+        // Initialize Voice Recorder UI
+        initVoiceRecorder();
+    }
+
+    async _initGoogleAuth() {
+        console.log('📄 Iniciando flujo de Google Auth...');
+
+        // Esperar a que google esté disponible
+        const checkGoogle = setInterval(async () => {
+            if (typeof google !== 'undefined' && google.accounts) {
+                clearInterval(checkGoogle);
+                await initializeAuth();
+            }
+        }, 300);
+
+        // Timeout de seguridad (máximo 15 segundos esperando)
+        setTimeout(() => {
+            clearInterval(checkGoogle);
+            if (!authManager || !authManager.isInitialized) {
+                console.warn('⚠️ google.accounts no cargó después de 15 segundos');
+                showToast('Error cargando Google. Recarga la página.', 'error');
+                updateAuthUI();
+            }
+        }, 15000);
     }
 
     _registerServiceWorker() {
@@ -33,7 +68,7 @@ class CashFlowApp {
     _setupEventListeners() {
         // Tab switching
         document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => this._switchTab(e.target.dataset.tab));
+            btn.addEventListener('click', (e) => this._switchTab(e.target.closest('.tab-btn').dataset.tab));
         });
 
         // Text Input
@@ -88,8 +123,10 @@ class CashFlowApp {
             content.classList.add('hidden');
         });
         const targetTab = document.getElementById(`${tabName}-tab`);
-        targetTab.classList.add('active');
-        targetTab.classList.remove('hidden');
+        if (targetTab) {
+            targetTab.classList.add('active');
+            targetTab.classList.remove('hidden');
+        }
 
         // Limpiar estado previo
         this.currentParsedData = null;
@@ -97,7 +134,8 @@ class CashFlowApp {
     }
 
     async _handleTextInput() {
-        const text = document.getElementById('textInput').value.trim();
+        const textArea = document.getElementById('textInput');
+        const text = textArea.value.trim();
 
         if (!text) {
             showToast('Por favor ingresá algo de texto', 'warning');
@@ -137,7 +175,6 @@ class CashFlowApp {
     }
 
     _handleVoiceStop() {
-        // En modo automático esto casi no se usa, pero por si acaso
         voiceRecorder.stop();
     }
 
@@ -155,10 +192,10 @@ class CashFlowApp {
             return;
         }
 
-        let html = '<div class="entries-neo">';
+        let html = '<ul class="entries-neo" style="list-style: none; padding: 0; margin: 0;">';
         data.entries.forEach(entry => {
             html += `
-                <div class="entry-neo">
+                <li class="entry-neo" style="margin-bottom: 12px;">
                     <div style="display: flex; align-items: flex-end; width: 100%; justify-content: space-between;">
                         <div>
                             <div class="name" style="display: flex; align-items: center; gap: 6px;">
@@ -168,14 +205,10 @@ class CashFlowApp {
                             <div class="amount">$${entry.amount}</div>
                         </div>
                     </div>
-                </div>
+                </li>
             `;
         });
-        html += '</div>';
-
-        if (data.summary) {
-            html += `<p style="font-size: 0.8rem; opacity: 0.6; font-weight: 500;">${data.summary}</p>`;
-        }
+        html += '</ul>';
 
         responseEl.innerHTML = html;
         confirmBtn.disabled = false;
@@ -203,8 +236,11 @@ class CashFlowApp {
 
         // Hide results panel and show active tab
         document.getElementById('resultsPanel').classList.add('hidden');
-        const activeTab = document.querySelector('.tab-btn.active').dataset.tab;
-        document.getElementById(`${activeTab}-tab`).classList.remove('hidden');
+        const activeTabBtn = document.querySelector('.tab-btn.active');
+        if (activeTabBtn) {
+            const activeTab = activeTabBtn.dataset.tab;
+            document.getElementById(`${activeTab}-tab`).classList.remove('hidden');
+        }
 
         // Reset inputs
         document.getElementById('textInput').value = '';
@@ -222,8 +258,8 @@ class CashFlowApp {
                 return;
             }
 
-            // Usamos el nuevo método específico para Gastos Extra
-            await manager.addGastoExtra(
+            // Usamos el nuevo método de ruteo inteligente (Fijos -> Gastos Extra)
+            await manager.addExpense(
                 config.sheetId,
                 config.sheetName,
                 this.currentParsedData.entries
@@ -264,15 +300,15 @@ class CashFlowApp {
         config.apiKey = apiKey;
         config.sheetId = sheetId;
         config.sheetName = sheetName;
-        config.lang = document.getElementById('appLang')?.value || 'es-AR';
+        const appLang = document.getElementById('appLang');
+        if (appLang) config.lang = appLang.value;
         config.save();
-
-        // Reset processors para usar nueva API key
-        geminiProcessor = null;
-        sheetsManager = null;
 
         document.getElementById('settingsModal').classList.remove('active');
         showToast('✅ Configuración guardada', 'success');
+
+        // Reload page to apply changes in ESM structure easily
+        setTimeout(() => window.location.reload(), 500);
     }
 
     _checkConfiguration() {
@@ -287,27 +323,6 @@ class CashFlowApp {
         if (greetingEl) {
             greetingEl.textContent = name === '¡Hola!' ? '¡Hola!' : `¡Hola, ${name}!`;
         }
-    }
-
-}
-
-// Utility Functions
-function showToast(message, type = 'info') {
-    const toast = document.getElementById('toast');
-    toast.textContent = message;
-    toast.className = `toast-neo show ${type}`;
-
-    setTimeout(() => {
-        toast.classList.remove('show');
-    }, 4000);
-}
-
-function showSpinner(show) {
-    const spinner = document.getElementById('loadingSpinner');
-    if (show) {
-        spinner.classList.remove('hidden');
-    } else {
-        spinner.classList.add('hidden');
     }
 }
 

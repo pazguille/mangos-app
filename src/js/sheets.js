@@ -1,81 +1,101 @@
+import { config } from './config.js';
+import { authManager } from './auth.js';
+import { showToast, showSpinner } from './utils.js';
+
 // Google Sheets API Integration con OAuth2
-class GoogleSheetsManager {
+export class GoogleSheetsManager {
     constructor(accessToken) {
         this.accessToken = accessToken;
         this.baseUrl = 'https://sheets.googleapis.com/v4/spreadsheets';
     }
 
-    async addGastoExtra(sheetId, sheetName, entries) {
+    async addExpense(sheetId, sheetName, entries) {
         try {
             showSpinner(true);
 
-            // 1. Obtener los datos actuales para encontrar dónde insertar
-            const values = await this.getSheetData(sheetId, sheetName, 'A1:M100');
+            // 1. Obtener los datos actuales. Rango amplio para encontrar headers.
+            const values = await this.getSheetData(sheetId, sheetName, 'A1:M60');
 
             if (!values || values.length === 0) {
                 throw new Error('No se pudieron leer los datos del sheet');
             }
 
-            // 2. Encontrar la sección "Gastos Extra" (Columna K es índice 10)
-            // Buscamos la ULTIMA ocurrencia por si hay varias
-            let headerRowIndex = -1;
-            for (let i = 0; i < values.length; i++) {
-                if (values[i][10] === 'Gastos Extra') {
-                    headerRowIndex = i;
-                }
-            }
+            const entry = entries[0];
+            let targetRange = '';
+            let targetValues = [[entry.name, entry.amount]];
+            let foundInFijos = false;
 
-            if (headerRowIndex === -1) {
-                throw new Error('No se encontró la sección "Gastos Extra" en la columna K');
-            }
+            // RANGOS DEFINIDOS POR EL USUARIO: Filas 20 a 54
+            // Nota: En arrays de JS (0-indexed), fila 20 es index 19, fila 54 es index 53.
+            const MIN_ROW = 20;
+            const MAX_ROW = 54;
 
-            // 3. Encontrar la primera fila vacía después del header en columna K
-            let targetRowIndex = -1;
-            for (let i = headerRowIndex + 1; i < values.length; i++) {
-                if (!values[i][10] || values[i][10].trim() === '') {
-                    targetRowIndex = i;
+            // --- INTENTO 1: SECTION "FIJOS" (Columna G, I) ---
+            // Buscamos espacio entre fila 20 y 54
+            for (let i = MIN_ROW - 1; i < MAX_ROW; i++) {
+                // Columna G es index 6
+                const rowData = values[i] || [];
+                if (!rowData[6] || rowData[6].trim() === '') {
+                    // Encontré fila vacía en Fijos (Columna G)
+                    const rowNumber = i + 1;
+                    const concepto = entry.name;
+                    const importe = entry.amount;
+                    const colH = rowData[7] || ''; // Mantener columna H intacta
+
+                    targetRange = `${sheetName}!G${rowNumber}:I${rowNumber}`;
+                    targetValues = [[concepto, colH, importe]];
+                    foundInFijos = true;
                     break;
                 }
             }
 
-            // Si llegamos al final y no hay vacías, usamos la siguiente fila
-            if (targetRowIndex === -1) {
-                targetRowIndex = values.length;
+            // --- INTENTO 2: SECTION "GASTOS EXTRA" (Columna K, L) (FALLBACK) ---
+            if (!foundInFijos) {
+                let extraTargetRow = -1;
+                for (let i = MIN_ROW - 1; i < MAX_ROW; i++) {
+                    // Columna K es index 10
+                    const rowData = values[i] || [];
+                    if (!rowData[10] || rowData[10].trim() === '') {
+                        extraTargetRow = i;
+                        break;
+                    }
+                }
+
+                if (extraTargetRow === -1) {
+                    throw new Error('⚠️ Ambas secciones (Fijos y Gastos Extra) están llenas hasta la fila 54.');
+                }
+
+                const rowNumber = extraTargetRow + 1;
+                targetRange = `${sheetName}!K${rowNumber}:L${rowNumber}`;
+                targetValues = [[entry.name, entry.amount]];
             }
 
-            // 4. Preparar la actualización (Columna K y L)
-            const entry = entries[0]; // Por ahora procesamos de a uno o el primero
-            const rowNumber = targetRowIndex + 1;
-            const range = `${sheetName}!K${rowNumber}:L${rowNumber}`;
-
-            const resource = {
-                values: [[entry.name, entry.amount]]
-            };
-
-            const url = `${this.baseUrl}/${sheetId}/values/${range}?valueInputOption=USER_ENTERED`;
+            // --- EJECUTAR UPDATE ---
+            const url = `${this.baseUrl}/${sheetId}/values/${targetRange}?valueInputOption=USER_ENTERED`;
 
             const response = await fetch(url, {
-                method: 'PUT', // Usamos PUT para update de un rango específico
+                method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${this.accessToken}`
                 },
-                body: JSON.stringify(resource)
+                body: JSON.stringify({ values: targetValues })
             });
 
             if (!response.ok) {
                 const error = await response.json();
-                throw new Error(error.error?.message || 'Error al actualizar celda');
+                throw new Error(error.error?.message || 'Error al actualizar sheet');
             }
 
             showSpinner(false);
-            showToast(`✅ Gasto guardado: ${entry.name}`, 'success');
+            const section = foundInFijos ? 'Fijos' : 'Gastos Extra';
+            showToast(`✅ Guardado en ${section}: ${entry.name}`, 'success');
             return await response.json();
 
         } catch (error) {
             showSpinner(false);
             console.error('Sheets Error:', error);
-            showToast(`Error al guardar: ${error.message}`, 'error');
+            showToast(`${error.message}`, 'error');
             throw error;
         }
     }
@@ -113,7 +133,7 @@ class GoogleSheetsManager {
 
 let sheetsManager = null;
 
-function getSheetsManager() {
+export function getSheetsManager() {
     if (!authManager || !authManager.isSignedIn()) {
         return null;
     }

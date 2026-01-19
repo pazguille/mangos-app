@@ -1,5 +1,9 @@
+import { config } from './config.js';
+import { showToast } from './utils.js';
+
 // OAuth2 Authentication for Google Sheets (usando Google Identity Services)
-class GoogleAuthManager {
+export class GoogleAuthManager {
+// ... (rest of the class remains the same)
     constructor() {
         this.CLIENT_ID = config.googleClientId;
         this.accessToken = localStorage.getItem('cashflow_access_token');
@@ -101,7 +105,7 @@ class GoogleAuthManager {
             console.warn('⚠️ No se pudo extraer email del token (es normal con access tokens)');
         }
 
-        showToast(`✅ Autenticado correctamente`, 'success');
+        // showToast(`✅ Autenticado correctamente`, 'success');
         updateAuthUI();
         if (window.app) window.app._updateGreeting();
     }
@@ -134,7 +138,7 @@ class GoogleAuthManager {
                 // Limpiar la URL para que no quede el token ahí
                 window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
 
-                showToast(`✅ Autenticado correctamente`, 'success');
+                // showToast(`✅ Autenticado correctamente`, 'success');
 
                 // Intentar obtener el nombre del usuario
                 this._fetchUserInfo(accessToken);
@@ -184,7 +188,9 @@ class GoogleAuthManager {
 
     async signOut() {
         try {
-            google.accounts.id.disableAutoSelect();
+            if (typeof google !== 'undefined' && google.accounts) {
+                google.accounts.id.disableAutoSelect();
+            }
 
             // Revocar el access token
             if (this.accessToken) {
@@ -234,10 +240,10 @@ class GoogleAuthManager {
     }
 }
 
-// Instancia global (instanciada inmediatamente para leer localStorage)
-let authManager = new GoogleAuthManager();
+// Instancia global
+export let authManager = new GoogleAuthManager();
 
-async function initializeAuth() {
+export async function initializeAuth() {
     console.log('🔄 Inicializando auth (Google SDK)...');
     const initialized = await authManager.initialize();
 
@@ -259,7 +265,7 @@ async function initializeAuth() {
     }
 }
 
-function updateAuthUI() {
+export function updateAuthUI() {
     console.log('🎨 Actualizando UI...');
     const settingsBtn = document.getElementById('settingsBtn');
     const headerActions = document.querySelector('.header-actions');
@@ -311,28 +317,3 @@ function updateAuthUI() {
         console.log('⚠️ Usuario no autenticado');
     }
 }
-
-// Inicializar cuando el DOM esté listo
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('📄 DOM listo');
-
-    // Esperar a que google esté disponible
-    const checkGoogle = setInterval(async () => {
-        console.log('🔍 Buscando google.accounts...');
-        if (typeof google !== 'undefined' && google.accounts) {
-            console.log('✅ google.accounts encontrado');
-            clearInterval(checkGoogle);
-            await initializeAuth();
-        }
-    }, 300);
-
-    // Timeout de seguridad (máximo 15 segundos esperando)
-    setTimeout(() => {
-        clearInterval(checkGoogle);
-        if (!authManager || !authManager.isInitialized) {
-            console.warn('⚠️ google.accounts no cargó después de 15 segundos');
-            showToast('Error cargando Google. Recarga la página.', 'error');
-            updateAuthUI(); // Mostrar botón de todas formas
-        }
-    }, 15000);
-});

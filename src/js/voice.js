@@ -1,5 +1,8 @@
+import { config } from './config.js';
+import { showToast } from './utils.js';
+
 // Web Speech API Integration
-class VoiceRecorder {
+export class VoiceRecorder {
     constructor() {
         this.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -165,17 +168,18 @@ class VoiceRecorder {
     }
 }
 
-const voiceRecorder = new VoiceRecorder();
+export const voiceRecorder = new VoiceRecorder();
 
-function initVoiceRecorder() {
+export function initVoiceRecorder() {
     if (!voiceRecorder.supported) {
-        document.getElementById('voice-tab').innerHTML = `
-            <div style="padding: 20px; text-align: center; color: var(--text-secondary);">
-                <p>⚠️ Web Speech API no está disponible en tu navegador.</p>
-                <p>Por favor usa Firefox, Chrome, Edge o Safari.</p>
-            </div>
-        `;
+        const voiceTab = document.getElementById('voice-tab');
+        if (voiceTab) {
+            voiceTab.innerHTML = `
+                <div style="padding: 20px; text-align: center; color: var(--text-secondary);">
+                    <p>⚠️ Web Speech API no está disponible en tu navegador.</p>
+                    <p>Por favor usa Firefox, Chrome, Edge o Safari.</p>
+                </div>
+            `;
+        }
     }
 }
-
-document.addEventListener('DOMContentLoaded', initVoiceRecorder);

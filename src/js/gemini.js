@@ -1,9 +1,11 @@
+import { config } from './config.js';
+import { showToast, showSpinner } from './utils.js';
+
 // Gemini API Integration
-class GeminiProcessor {
+export class GeminiProcessor {
     constructor(apiKey) {
         this.apiKey = apiKey;
-        // this.model = 'gemini-2.5-flash';
-        this.model = 'gemini-2.5-flash-lite';
+        this.model = 'gemini-1.5-flash';
         this.baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent`;
     }
 
@@ -14,35 +16,34 @@ class GeminiProcessor {
 
 
     _buildPrompt(text) {
-        return `Eres un asistente financiero. Extrae los datos de GASTO EXTRA del usuario.
+        return `You are a financial assistant. Extract EXTRA EXPENSE data from the user.
 
-REGLAS:
-1. Extrae solo el concepto (nombre) y el monto total.
-2. El resultado debe ser SIEMPRE un JSON con la estructura indicada.
-3. Si no hay monto claro, estima o pon 0 y baja la confianza.
+RULES:
+1. Extract only the concept (name) and the total amount.
+2. The result must ALWAYS be a JSON with the indicated structure.
+3. If there is no clear amount, estimate it or put 0 and lower the confidence.
 
-Entrada: "${text}"
+Input: "${text}"
 
-Estructura JSON:
+JSON Structure:
 {
     "entries": [
         {
-            "name": "Nombre del gasto",
-            "amount": número positivo
+            "name": "Expense name",
+            "amount": positive number
         }
     ],
-    "summary": "Breve resumen",
-    "confidence": número (0-1)
+    "confidence": number (0-1)
 }
 
-No incluyas texto fuera del JSON. Si hay varios gastos, lístalos todos en "entries".`;
+Do not include any text outside of the JSON. If there are multiple expenses, list them all in "entries".`;
     }
 
     async _callGemini(prompt) {
         try {
             showSpinner(true);
 
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
+            const url = `${this.baseUrl}?key=${this.apiKey}`;
 
             const response = await fetch(url, {
                 method: 'POST',
@@ -99,7 +100,7 @@ No incluyas texto fuera del JSON. Si hay varios gastos, lístalos todos en "entr
 
 let geminiProcessor = null;
 
-function getGeminiProcessor() {
+export function getGeminiProcessor() {
     if (!config.isConfigured()) {
         showToast('Por favor configura tu API Key primero', 'error');
         return null;
