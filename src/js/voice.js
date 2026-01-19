@@ -48,7 +48,6 @@ export class VoiceRecorder {
 
         this.recognition.onerror = (event) => {
             console.error('Speech recognition error', event.error);
-            showToast(`Error en reconocimiento de voz: ${event.error}`, 'error');
             this._updateUI('error');
         };
 
