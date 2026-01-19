@@ -5,7 +5,7 @@ import { showToast, showSpinner } from './utils.js';
 export class GeminiProcessor {
     constructor(apiKey) {
         this.apiKey = apiKey;
-        this.model = 'gemini-1.5-flash';
+        this.model = 'gemini-2.5-flash-lite';
         this.baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent`;
     }
 
