@@ -5,13 +5,15 @@ class GoogleAuthManager {
         this.accessToken = localStorage.getItem('cashflow_access_token');
         this.tokenExpiry = localStorage.getItem('cashflow_token_expiry');
         this.isInitialized = false;
-        this.tokenClient = null; // Para OAuth2 token requests
     }
 
     async initialize() {
         return new Promise((resolve) => {
             try {
-                // Esperar a que google esté disponible
+                // 1. Revisar si volvemos de una redirección con un token en el hash
+                this._parseHashToken();
+
+                // 2. Esperar a que google esté disponible
                 if (typeof google === 'undefined' || !google.accounts) {
                     console.error('❌ google.accounts no disponible');
                     resolve(false);
@@ -21,20 +23,14 @@ class GoogleAuthManager {
                 // Inicializar Google Identity Services CON SCOPES para OAuth2
                 google.accounts.id.initialize({
                     client_id: config.googleClientId,
+                    ux_mode: 'redirect', // Forzar modo redirección
                     callback: (response) => this._handleCredentialResponse(response),
                     // Scopes para acceder a Google Sheets
                     scope: 'https://www.googleapis.com/auth/spreadsheets'
                 });
 
-                // Inicializar Google Accounts también (para TokenClient)
-                this.tokenClient = google.accounts.oauth2.initTokenClient({
-                    client_id: config.googleClientId,
-                    scope: 'https://www.googleapis.com/auth/spreadsheets',
-                    callback: (response) => this._handleTokenResponse(response)
-                });
-
                 this.isInitialized = true;
-                console.log('✅ Google Identity Services inicializado con scopes OAuth2');
+                console.log('✅ Google Identity Services inicializado');
                 resolve(true);
 
             } catch (error) {
@@ -45,14 +41,8 @@ class GoogleAuthManager {
     }
 
     _handleCredentialResponse(response) {
-        console.log('📝 ID Token recibido (para autenticación)');
-
-        // El primer sign-in devuelve un ID Token
-        // Ahora necesitamos obtener el Access Token
-        if (this.tokenClient) {
-            console.log('🔄 Solicitando Access Token para Sheets...');
-            this.tokenClient.requestAccessToken();
-        }
+        console.log('📝 ID Token recibido, solicitando Access Token vía redirección...');
+        this.requestAccessToken();
     }
 
     _handleTokenResponse(response) {
@@ -94,6 +84,48 @@ class GoogleAuthManager {
 
         showToast(`✅ Autenticado correctamente`, 'success');
         updateAuthUI();
+    }
+
+    _parseHashToken() {
+        const hash = window.location.hash;
+        if (hash) {
+            const params = new URLSearchParams(hash.substring(1));
+
+            if (params.has('error')) {
+                console.error('❌ Error de Google Auth:', params.get('error'));
+                showToast(`Error: ${params.get('error')}`, 'error');
+                window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+                return;
+            }
+
+            if (params.has('access_token')) {
+                console.log('📝 Detectado token en URL hash (retorno de redirect)');
+                const accessToken = params.get('access_token');
+                const expiresIn = params.get('expires_in');
+
+                this.accessToken = accessToken;
+                localStorage.setItem('cashflow_access_token', this.accessToken);
+
+                const expiry = new Date();
+                expiry.setSeconds(expiry.getSeconds() + (parseInt(expiresIn) || 3600));
+                this.tokenExpiry = expiry.toISOString();
+                localStorage.setItem('cashflow_token_expiry', this.tokenExpiry);
+
+                // Limpiar la URL para que no quede el token ahí
+                window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+                showToast(`✅ Autenticado correctamente`, 'success');
+            }
+        }
+    }
+
+    requestAccessToken() {
+        console.log('🔄 Solicitando Access Token vía redirección...');
+        const scopes = 'https://www.googleapis.com/auth/spreadsheets';
+        // Normalizar redirectUri para que sea el origen + /
+        const redirectUri = window.location.origin;
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${this.CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent(scopes)}&prompt=consent`;
+
+        window.location.href = authUrl;
     }
 
     signIn() {
@@ -209,29 +241,22 @@ function updateAuthUI() {
             container.style.display = 'inline-block';
             headerActions.insertBefore(container, headerActions.firstChild);
 
-            // Renderizar el botón de Google
-            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-                google.accounts.id.renderButton(
-                    container,
-                    {
-                        theme: 'outline',
-                        size: 'large',
-                        text: 'signin_with'
-                    }
-                );
+            // Renderizar un botón custom de Google (más confiable para redirección manual)
+            container.innerHTML = `
+                <button class="btn-neo" style="padding: 8px 16px; font-size: 0.8rem; border-radius: 40px; background: white; color: var(--text-main); border: 1px solid var(--border-strong);">
+                    <svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.26.81-.58z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 12-4.53z" fill="#EA4335"/>
+                    </svg>
+                    Ingresar
+                </button>
+            `;
 
-                // Agregar click listener para pedir token cuando se autentique
-                container.addEventListener('click', () => {
-                    console.log('👆 Click en botón, solicitando token...');
-                    if (authManager && authManager.tokenClient) {
-                        authManager.tokenClient.requestAccessToken({ prompt: 'consent' });
-                    }
-                });
+            container.querySelector('button').addEventListener('click', () => {
+                console.log('👆 Click en botón custom, solicitando login...');
+                authManager.requestAccessToken();
+            });
 
-                console.log('✅ Botón de Google Sign-In renderizado');
-            } else {
-                console.warn('⚠️ google.accounts no disponible');
-            }
+            console.log('✅ Botón custom de Google renderizado');
         }
 
         console.log('⚠️ Usuario no autenticado');
