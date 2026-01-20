@@ -15,7 +15,10 @@ export class GoogleAuthManager {
     async initialize() {
         return new Promise((resolve) => {
             try {
-                // GIS Token Model Initialization
+                // Check if we have a token in the URL after redirect
+                this._checkTokenFromUrl();
+
+                // GIS Token Model Initialization (keep for silent refresh)
                 if (typeof google === 'undefined' || !google.accounts) {
                     console.error('❌ google.accounts no disponible');
                     resolve(false);
@@ -44,6 +47,33 @@ export class GoogleAuthManager {
                 resolve(false);
             }
         });
+    }
+
+    _checkTokenFromUrl() {
+        const hash = window.location.hash.substring(1);
+        if (!hash) return;
+
+        const params = new URLSearchParams(hash);
+        const accessToken = params.get('access_token');
+        const expiresIn = params.get('expires_in');
+
+        if (accessToken) {
+            console.log('🏷️ Token encontrado en URL (Redirect Flow)');
+
+            this.accessToken = accessToken;
+            localStorage.setItem('cashflow_access_token', this.accessToken);
+
+            const expiry = new Date();
+            expiry.setSeconds(expiry.getSeconds() + (parseInt(expiresIn) || 3600));
+            this.tokenExpiry = expiry.toISOString();
+            localStorage.setItem('cashflow_token_expiry', this.tokenExpiry);
+
+            // Clean URL
+            history.replaceState(null, null, window.location.pathname);
+
+            // Fetch user info
+            this._fetchUserInfo(this.accessToken);
+        }
     }
 
     _handleTokenResponse(response) {
@@ -123,14 +153,26 @@ export class GoogleAuthManager {
             return;
         }
 
-        console.log(`🔄 Solicitando Access Token (${silent ? 'silencioso' : 'con prompt'})...`);
+        console.log(`🔄 Solicitando Access Token (${silent ? 'silencioso' : 'con redirect'})...`);
 
-        // El modo silencioso usa prompt: '' (GIS Token Model no tiene un "silent: true" explícito como tal en el request)
-        // Pero podemos usar requestAccessToken() y si el usuario ya está logueado en Google, suele ser invisible
-        // a menos que se requiera consentimiento.
-        this.tokenClient.requestAccessToken({
-            prompt: silent ? '' : 'consent'
-        });
+        if (silent) {
+            // Peligroso: Si falla el silencioso, GIS abre un popup por defecto en algunos navegadores
+            // si no seteamos prompt: ''. Pero para redirect flow real, preferimos que si no es silent,
+            // hagamos un redirect manual.
+            this.tokenClient.requestAccessToken({ prompt: '' });
+        } else {
+            // Redirect Flow (Implicit Flow manual)
+            const rootUrl = window.location.origin + window.location.pathname;
+            const oauthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+                `client_id=${this.CLIENT_ID}&` +
+                `redirect_uri=${rootUrl}&` +
+                `response_type=token&` +
+                `scope=https://www.googleapis.com/auth/spreadsheets openid profile email&` +
+                `include_granted_scopes=true&` +
+                `state=oauth_redirect`;
+
+            window.location.href = oauthUrl;
+        }
     }
 
     signIn() {
