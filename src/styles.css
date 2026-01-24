@@ -293,7 +293,6 @@ textarea {
     left: 50%;
     transform: translate(-50%, -50%) scale(1);
     cursor: pointer;
-    overflow: hidden; /* Mantener todo adentro */
     -webkit-tap-highlight-color: transparent;
     opacity: 1;
     display: flex;
@@ -336,6 +335,11 @@ textarea {
     transform: translate(-50%, -50%) scale(1.55);
 }
 
+.btn-voice-main.loading .voiceOrb-container {
+    opacity: 0;
+    pointer-events: none;
+}
+
 .btn-neo.loading {
     pointer-events: none;
     opacity: 0.8;
@@ -357,6 +361,7 @@ textarea {
     transform: translate(-50%, -50%) rotate(0deg);
     transition: 0.2s ease;
     pointer-events: none;
+    z-index: 10;
 }
 
 .btn-spinner::before {

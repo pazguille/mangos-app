@@ -211,10 +211,20 @@ class mangosApp {
 
         document.querySelector('video').playbackRate = 3;
 
-        voiceRecorder.start((transcript) => {
+        voiceRecorder.start(async (transcript) => {
             // Este callback se ejecuta cuando se detecta el final del habla
             document.getElementById('textInput').value = transcript;
-            this._handleTextInput();
+
+            // Show loading state
+            const unifiedBtn = document.getElementById('unifiedInputBtn');
+            if (unifiedBtn) unifiedBtn.classList.add('loading');
+
+            try {
+                await this._handleTextInput();
+            } finally {
+                // Remove loading state
+                if (unifiedBtn) unifiedBtn.classList.remove('loading');
+            }
         });
     }
 
@@ -262,6 +272,7 @@ class mangosApp {
         // Show results panel and hide inputs
         document.getElementById('resultsPanel').classList.remove('hidden');
         document.querySelector('.text-input-section').classList.add('hidden');
+        document.querySelector('.voice-nexus').classList.add('hidden');
 
         document.getElementById('resultsPanel').scrollIntoView({ behavior: 'smooth' });
     }
@@ -273,6 +284,7 @@ class mangosApp {
 
         // Hide results panel and show voice button
         document.getElementById('resultsPanel').classList.add('hidden');
+        document.querySelector('.voice-nexus').classList.remove('hidden');
         this._hideTextInput();
 
         // Reset inputs
