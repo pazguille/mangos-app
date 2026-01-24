@@ -20,40 +20,110 @@ export class VoiceRecorder {
     }
 
     _setupRecognition() {
-        this.recognition.continuous = false; // Auto-stop cuando el usuario deja de hablar
-        this.recognition.interimResults = true;
+        this.recognition.continuous = true;
+        this.recognition.interimResults = false;
         this.recognition.lang = config.lang || 'es-AR';
 
-        this.onComplete = null; // Callback para cuando termina
+        this.onComplete = null;
+        this.prevText = '';
 
-        this.recognition.onstart = () => {
+        this.recognition.onstart = async () => {
             this.isRecording = true;
+            await this._startAnalyser();
         };
 
         this.recognition.onresult = (event) => {
+            const { results, resultIndex } = event;
+
+            // Handle edge case where results is undefined (mobile chrome sometimes)
+            if (!results) return;
+
             let interim = '';
             let final = '';
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                const transcript = event.results[i][0].transcript;
-                if (event.results[i].isFinal) {
-                    final += transcript + ' ';
+
+            // Iterate ONLY from resultIndex to avoid processing old results
+            for (let i = resultIndex; i < results.length; i++) {
+                const result = results[i];
+                const transcript = result[0].transcript;
+
+                if (result.isFinal) {
+                    // Format or clean if needed
+                    final += transcript;
                 } else {
                     interim += transcript;
                 }
             }
-            this.transcript = final;
+
+            // If we have final text, append it to our full transcript or handle it
+            if (final) {
+                // In continuous mode with 'resultIndex', we accumulate manually if we wanted
+                // but checking the reference, they assume `final` is just the current chunk.
+                // However, for our textarea, we usually want the FULL text.
+                // SpeechRecognition usually keeps 'results' accumulating in continuous mode
+                // UNLESS we stop/start.
+                // Let's stick to the current simpler logic but using resultIndex correctly.
+
+                // CRITICAL: In continuous mode, event.results grows.
+                // We need to re-construct the full text or just append new parts.
+                // Simpler approach for text input: Re-construct full text from ALL results
+                // to ensure we don't duplicate or lose edits if we were syncing.
+                // But `resultIndex` optimization suggests we only look at new stuff.
+
+                // Let's adopt the reference's approach of `prevText` if we were stream-processing,
+                // but for filling a textarea, iterating all `results` is safer to keep sync,
+                // UNLESS user edits text while speaking (which is rare here).
+                // Let's stick to standard full iteration but SAFELY.
+
+                // Actually, the reference logic:
+                // [...results].slice(resultIndex).map(...)
+                // and accumulation.
+
+                // Let's revert to a robust full-scan for simplicity and data integrity
+                // unless performance is an issue (it won't be for short commands).
+                // But we MUST respect `resultIndex` to know what's new vs old if we did stream actions.
+            }
+
+            // Re-build full transcript from scratch to ensure consistency
+            let fullTranscript = '';
+            let currentInterim = '';
+
+            for (let i = 0; i < results.length; i++) {
+                if (results[i].isFinal) {
+                    fullTranscript += results[i][0].transcript;
+                } else {
+                    currentInterim += results[i][0].transcript;
+                }
+            }
+
+            // Allow external access to the "live" text (final + interim)
+            this.transcript = (fullTranscript + currentInterim).trim();
+            console.log(this.transcript); // Debug
+
+            // If we had a callback for realtime updates, we'd call it here
+            // The app currently polls or waits for onend.
+            // We should probably update the textarea on the fly!
+            // But right now app architecture reads `this.transcript` on callback?
+            // Checking app.js:
+            // voiceRecorder.start((transcript) => { ... }) -> this is ONEND callback usually
+            // But wait, app.js logic:
+            // voiceRecorder.start((transcript) => { document.getElementById('textInput').value = transcript; ... })
+            // This suggests the callback is called ONCE at the end?
+            // Let's check `start` implementation.
         };
 
         this.recognition.onerror = (event) => {
             console.error('Speech recognition error', event.error);
+            if (event.error === 'no-speech') {
+                return; // Ignore no-speech errors, just stay listening or stop if desired
+            }
             this._updateUI('error');
         };
 
         this.recognition.onend = () => {
             this.isRecording = false;
             this._updateUI('stopped');
+            this._stopAnalyser();
 
-            // Si hay transcript, avisar que terminó
             if (this.transcript.trim() && this.onComplete) {
                 this.onComplete(this.transcript.trim());
             }
@@ -66,10 +136,9 @@ export class VoiceRecorder {
             return;
         }
 
-        // Safari fix: Re-initialize on each start to avoid state issues
+        // Always re-create recognition instance for stability
         this.recognition = new this.SpeechRecognition();
         this._setupRecognition();
-        this._startAnalyser(); // Iniciar analizador de audio real-time
 
         this.transcript = '';
         this.onComplete = onCompleteCallback;
@@ -78,6 +147,7 @@ export class VoiceRecorder {
             this._updateUI('recording');
             this.recognition.start();
         } catch (e) {
+            console.error(e);
             showToast('Error al iniciar micrófono', 'error');
             this._stopAnalyser();
         }
@@ -90,6 +160,11 @@ export class VoiceRecorder {
 
     async _startAnalyser() {
         try {
+            if (!window.AudioContext && !window.webkitAudioContext) {
+                console.warn('Web Audio API not supported');
+                return;
+            }
+
             if (!this.audioContext) {
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 this.analyser = this.audioContext.createAnalyser();
