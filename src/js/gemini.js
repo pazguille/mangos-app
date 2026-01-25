@@ -3,8 +3,8 @@ import { showToast, showSpinner } from './utils.js';
 
 // Gemini API Integration
 export class GeminiProcessor {
-    constructor(apiKey) {
-        this.apiKey = apiKey;
+    constructor() {
+        this.apiKey = '';
         this.model = 'gemini-2.5-flash-lite';
         this.baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent`;
     }
@@ -19,9 +19,10 @@ export class GeminiProcessor {
         return `You are a financial assistant. Extract EXTRA EXPENSE data from the user.
 
 RULES:
-1. Extract only the concept (name) and the total amount.
+1. Extract only the concept (name) and the total amount (include $symbol).
 2. The result must ALWAYS be a JSON with the indicated structure.
 3. If there is no clear amount, estimate it or put 0 and lower the confidence.
+4. Use spanish for the response.
 
 Input: "${text}"
 
@@ -30,7 +31,7 @@ JSON Structure:
     "entries": [
         {
             "name": "Expense name",
-            "amount": positive number
+            "amount": "positive number" (include $symbol)
         }
     ],
     "confidence": number (0-1)

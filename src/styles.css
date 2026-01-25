@@ -584,6 +584,49 @@ textarea {
 .toast-neo.show { transform: translateX(-50%) translateY(0); }
 .toast-neo.error { background: #ff4747; }
 
+/* Editable Inputs */
+.input-edit-name {
+    background: transparent;
+    border: none;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-main);
+    width: 100%;
+    padding: 4px 0;
+    outline: none;
+    opacity: 0.9;
+}
+
+.input-edit-name:focus {
+    border-bottom: 1px solid var(--accent);
+    opacity: 1;
+}
+
+.input-edit-amount {
+    background: transparent;
+    border: none;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: var(--accent);
+    width: 100%;
+    padding: 0;
+    outline: none;
+}
+
+.input-edit-amount:focus {
+    border-bottom: 1px solid var(--accent);
+}
+
+/* Editable Inputs Container */
+.name-edit-container {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+
 /* Utilities */
 .hidden { display: none !important; }
 

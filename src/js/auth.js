@@ -1,11 +1,10 @@
-import { config } from './config.js';
 import { showToast } from './utils.js';
 
 // OAuth2 Authentication for Google Sheets (usando Google Identity Services)
 export class GoogleAuthManager {
 // ... (rest of the class remains the same)
     constructor() {
-        this.CLIENT_ID = config.googleClientId;
+        this.CLIENT_ID = '256070338281-j2n8l3662cs52te244u462h48svrgpi5.apps.googleusercontent.com';
         this.accessToken = localStorage.getItem('mangos_access_token');
         this.tokenExpiry = localStorage.getItem('mangos_token_expiry');
         this.isInitialized = false;

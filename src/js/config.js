@@ -8,8 +8,7 @@ class Config {
     load() {
         this.sheetId = '';
         this.sheetName = '';
-        this.googleClientId = '';
-        this.apiKey = '';
+        this.provider = 'openrouter'; // 'openrouter' or 'gemini'
 
         const stored = localStorage.getItem(this.storageKey);
 
@@ -17,25 +16,19 @@ class Config {
             const data = JSON.parse(stored);
             this.sheetId = data.sheetId || '';
             this.sheetName = data.sheetName || '';
-            this.lang = data.lang || 'es-AR';
-            this.googleClientId = data.googleClientId || '';
-            this.apiKey = data.apiKey || '';
         }
     }
 
     save() {
         const data = {
-            apiKey: this.apiKey,
             sheetId: this.sheetId,
             sheetName: this.sheetName,
-            googleClientId: this.googleClientId,
-            lang: this.lang
         };
         localStorage.setItem(this.storageKey, JSON.stringify(data));
     }
 
     isConfigured() {
-        return !!this.apiKey;
+        return !!this.sheetId;
     }
 }
 

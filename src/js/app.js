@@ -1,6 +1,7 @@
 import { config } from './config.js';
 import { authManager, initializeAuth, updateAuthUI } from './auth.js';
 import { getGeminiProcessor } from './gemini.js';
+import { getOpenRouterProcessor } from './openrouter.js';
 import { getSheetsManager } from './sheets.js';
 import { voiceRecorder, initVoiceRecorder } from './voice.js';
 import { showToast, showSpinner } from './utils.js';
@@ -190,7 +191,10 @@ class mangosApp {
 
         this.isProcessing = true;
         try {
-            const processor = getGeminiProcessor();
+            const processor = config.provider === 'openrouter'
+                ? getOpenRouterProcessor()
+                : getGeminiProcessor();
+
             if (!processor) return;
 
             const result = await processor.processText(text);
@@ -248,16 +252,16 @@ class mangosApp {
         }
 
         let html = '<ul class="entries-neo" style="list-style: none; padding: 0; margin: 0;">';
-        data.entries.forEach(entry => {
+        data.entries.forEach((entry, i) => {
             html += `
                 <li class="entry-neo" style="margin-bottom: 12px;">
                     <div style="display: flex; align-items: flex-end; width: 100%; justify-content: space-between;">
-                        <div>
-                            <div class="name" style="display: flex; align-items: center; gap: 4px;">
-                                <svg xmlns="http://www.w3.org/2000/svg" style="width: 16px; height: 16px;" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-tag-icon lucide-tag"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>
-                                ${entry.name}
+                        <div style="flex: 1; margin-right: 12px;">
+                            <div class="name-edit-container">
+                                <svg xmlns="http://www.w3.org/2000/svg" style="width: 16px; height: 16px; opacity: 0.5;" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-tag-icon lucide-tag"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>
+                                <input type="text" class="input-edit-name" value="${entry.name}" data-index="${i}" placeholder="Nombre del gasto" autocomplete="off">
                             </div>
-                            <div class="amount">$${entry.amount}</div>
+                            <input type="text" class="input-edit-amount" value="${entry.amount}" data-index="${i}" placeholder="0" inputmode="decimal">
                         </div>
                     </div>
                 </li>
@@ -269,7 +273,26 @@ class mangosApp {
         confirmBtn.disabled = false;
         rejectBtn.disabled = false;
 
-        // Show results panel and hide inputs
+        // Attach event listeners for real-time updates
+        const nameInputs = responseEl.querySelectorAll('.input-edit-name');
+        const amountInputs = responseEl.querySelectorAll('.input-edit-amount');
+
+        nameInputs.forEach(input => {
+            input.addEventListener('input', (e) => {
+                const index = e.target.dataset.index;
+                this.currentParsedData.entries[index].name = e.target.value;
+            });
+        });
+
+        amountInputs.forEach(input => {
+            input.addEventListener('input', (e) => {
+                const index = e.target.dataset.index;
+                // Treat amount as string to allow symbols
+                this.currentParsedData.entries[index].amount = e.target.value;
+            });
+        });
+
+        // Show results panel and hide voice/text inputs
         document.getElementById('resultsPanel').classList.remove('hidden');
         document.querySelector('.text-input-section').classList.add('hidden');
         document.querySelector('.voice-nexus').classList.add('hidden');
@@ -325,25 +348,35 @@ class mangosApp {
 
     _openSettings() {
         const modal = document.getElementById('settingsModal');
-        document.getElementById('googleClientId').value = config.googleClientId;
-        document.getElementById('apiKey').value = config.apiKey;
-        document.getElementById('sheetId').value = config.sheetId;
+
+        // Show current values if they exist
+        if (config.sheetId) {
+            document.getElementById('sheetUrl').value = `https://docs.google.com/spreadsheets/d/${config.sheetId}/edit`;
+        }
         document.getElementById('sheetName').value = config.sheetName;
+
         modal.classList.add('active');
     }
 
+
     _saveSettings() {
-        const googleClientId = document.getElementById('googleClientId').value.trim();
-        const apiKey = document.getElementById('apiKey').value.trim();
-        const sheetId = document.getElementById('sheetId').value.trim();
+        const sheetUrl = document.getElementById('sheetUrl').value.trim();
         const sheetName = document.getElementById('sheetName').value.trim();
 
-        config.googleClientId = googleClientId;
-        config.apiKey = apiKey;
-        config.sheetId = sheetId;
+        // Extract ID from URL
+        // Patterns: /spreadsheets/d/ID/edit, /spreadsheets/d/ID
+        const match = sheetUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+        if (match && match[1]) {
+            config.sheetId = match[1];
+        } else if (sheetUrl.length > 20 && !sheetUrl.includes('/')) {
+            // Assume it is the ID directly if no URL pattern matches
+            config.sheetId = sheetUrl;
+        } else {
+             showToast('URL de Spreadsheet inválida', 'error');
+             return;
+        }
+
         config.sheetName = sheetName;
-        const appLang = document.getElementById('appLang');
-        if (appLang) config.lang = appLang.value;
         config.save();
 
         document.getElementById('settingsModal').classList.remove('active');
