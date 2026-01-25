@@ -31,12 +31,18 @@ body {
     background-color: var(--bg-main);
      background-image: linear-gradient(
         330deg,
-        hsl(0deg 83% 81%) 0%,
+        /* hsl(0deg 83% 81%) 0%,
         hsl(16deg 91% 83%) -1%,
         hsl(31deg 97% 85%) -1%,
         hsl(39deg 100% 88%) 0%,
         hsl(40deg 100% 94%) 3%,
-        hsl(0deg 0% 100%) 32%
+        hsl(0deg 0% 100%) 32% */
+        hsl(0deg 83% 81%) 0%,
+        hsl(16deg 91% 83%) 4%,
+        hsl(31deg 97% 85%) 7%,
+        hsl(39deg 100% 88%) 9%,
+        hsl(40deg 100% 94%) 12%,
+        hsl(0deg 0% 100%) 19%
     );
     color: var(--text-main);
     font-family: 'Inter', sans-serif;
@@ -54,13 +60,14 @@ h1, h2, h3 {
 }
 
 h1 {
-    font-size: 1.5rem;
-    line-height: 1.5;
+    font-size: 1.1rem;
+    line-height: 2em;
     padding-left: 45px;
     background-image: url('/src/assets/logo-512.jpg');
     background-size: 45px;
     background-position: center left;
     background-repeat: no-repeat;
+    font-weight: 500;
 }
 
 .subtitle {
@@ -149,19 +156,19 @@ h1 {
 }
 
 .greeting-section {
-    margin: 40px 16px;
+    margin: 30px 16px;
 }
 
 .greeting-section h2 {
-    font-size: 1.2rem;
+    font-size: 1.3rem;
     font-weight: 300;
     opacity: 0.5;
-    margin-bottom: 5px;
+    margin-bottom: 10px;
 }
 
 .greeting-section .subtitle {
-    font-size: 1.2rem;
-    font-weight: 700;
+    font-size: 1.6rem;
+    font-weight: 400;
     color: var(--text-main);
 }
 
@@ -186,7 +193,7 @@ h1 {
 
 .text-input-section:not(.hidden) {
     opacity: 1;
-    transform: translateY(-340px);
+    transform: translateY(-290px);
 }
 
 /* Voice Nexus - Visible by default */
