@@ -3,7 +3,7 @@
   "name": "Mangos",
   "short_name": "Mangos",
   "description": "Tu asistente financiero inteligente y minimalista.",
-  "start_url": "index.html",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#FFFFFF",
   "theme_color": "#FFFFFF",

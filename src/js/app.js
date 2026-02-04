@@ -186,9 +186,14 @@ class mangosApp {
     _handleAuthChange() {
         console.log('🔄 Auth State Changed. Checking flow...');
         const isSignedIn = authManager.isSignedIn();
-        const expiry = new Date(authManager.tokenExpiry);
-        const tokenExpired = new Date() > expiry;
 
+        if (!authManager.tokenExpiry && !isSignedIn) {
+            console.log('👋 User not signed in -> Welcome Screen');
+            this._showWelcomeScreen();
+            return;
+        }
+
+        const tokenExpired = new Date() > new Date(authManager.tokenExpiry);
         if (tokenExpired) {
             console.log('🔄 Token Expired. Requesting Access Token...');
             authManager.requestAccessToken(true);
@@ -206,9 +211,6 @@ class mangosApp {
                 console.log('✨ User signed in but NOT configured -> Start Onboarding');
                 this._startOnboardingFlow();
             }
-        } else {
-            console.log('👋 User not signed in -> Welcome Screen');
-            this._showWelcomeScreen();
         }
     }
 
