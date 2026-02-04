@@ -208,8 +208,8 @@ class mangosApp {
                 this._showMainApp();
                 this._checkConfiguration(); // Run background checks (month update)
             } else {
-                console.log('✨ User signed in but NOT configured -> Start Onboarding');
-                this._startOnboardingFlow();
+                console.log('✨ User signed in but NOT configured -> Setup Choice');
+                this._showSetupChoice();
             }
         }
     }
@@ -220,6 +220,17 @@ class mangosApp {
         // Show welcome, hide others
         document.getElementById('welcomeSection').style.display = 'flex';
         document.getElementById('onboardingLoader').style.display = 'none';
+        document.getElementById('setupChoiceSection').style.display = 'none';
+        document.getElementById('home').style.display = 'none';
+    }
+
+    _showSetupChoice() {
+        // Show mainApp container
+        document.getElementById('mainApp').style.display = 'block';
+        // Show choice, hide others
+        document.getElementById('welcomeSection').style.display = 'none';
+        document.getElementById('onboardingLoader').style.display = 'none';
+        document.getElementById('setupChoiceSection').style.display = 'flex';
         document.getElementById('home').style.display = 'none';
     }
 
@@ -229,6 +240,7 @@ class mangosApp {
         // Hide welcome and loader
         document.getElementById('welcomeSection').style.display = 'none';
         document.getElementById('onboardingLoader').style.display = 'none';
+        document.getElementById('setupChoiceSection').style.display = 'none';
 
         const home = document.getElementById('home');
         if (home.style.display === 'none') {
@@ -269,6 +281,7 @@ class mangosApp {
         // Show mainApp container and loader
         document.getElementById('mainApp').style.display = 'block';
         document.getElementById('welcomeSection').style.display = 'none';
+        document.getElementById('setupChoiceSection').style.display = 'none';
         document.getElementById('home').style.display = 'none';
         document.getElementById('onboardingLoader').style.display = 'flex';
 
@@ -385,6 +398,10 @@ class mangosApp {
 
         // Settings
         document.getElementById('settingsBtn').addEventListener('click', () => this._openSettings());
+
+        // Setup Choices
+        document.getElementById('setupExistingBtn').addEventListener('click', () => this._openSettings());
+        document.getElementById('setupCreateBtn').addEventListener('click', () => this._startOnboardingFlow());
 
         // Modal controls
         const modal = document.getElementById('settingsModal');
