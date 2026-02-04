@@ -1,0 +1,25 @@
+{
+  "name": "mangos",
+  "version": "1.0.0",
+  "description": "mangos vibed app",
+  "main": "dev-cert.js",
+  "scripts": {
+    "dev": "serve -p 8001 --single --ssl-cert=./cert/tls.cert --ssl-key=./cert/tls.key",
+    "partytown": "partytown copylib ~partytown"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pazguille/mangos-app.git"
+  },
+  "author": "Guille Paz <guille87paz@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/pazguille/mangos-app/issues"
+  },
+  "homepage": "https://github.com/pazguille/mangos-app#readme",
+  "devDependencies": {
+    "@builder.io/partytown": "^0.10.2",
+    "devcert": "^1.2.2",
+    "serve": "^14.2.5"
+  }
+}

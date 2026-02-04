@@ -13,8 +13,8 @@ export class GoogleSheetsManager {
         try {
             showSpinner(true);
 
-            // 1. Obtener los datos actuales. Rango amplio para encontrar headers.
-            const values = await this.getSheetData(sheetId, sheetName, 'A1:M60');
+            // 1. Obtener los datos actuales.
+            const values = await this.getSheetData(sheetId, sheetName, 'A1:H120');
 
             if (!values || values.length === 0) {
                 throw new Error('No se pudieron leer los datos del sheet');
@@ -23,60 +23,37 @@ export class GoogleSheetsManager {
             const batchData = [];
             const savedItems = [];
 
-            // RANGOS DEFINIDOS POR EL USUARIO: Filas 20 a 54
-            const MIN_ROW = 20;
-            const MAX_ROW = 54;
+            // NUEVOS RANGOS: Filas 12 a 118, Columnas G (6) y H (7)
+            const MIN_ROW = 12;
+            const MAX_ROW = 118;
 
             // Iterar sobre cada entrada para encontrarle lugar
             for (const entry of entries) {
-                let foundInFijos = false;
+                let foundRow = false;
                 let targetRange = '';
                 let targetValues = null;
-                let rowIndex = -1;
 
-                // --- INTENTO 1: SECTION "FIJOS" (Columna G, I) ---
                 for (let i = MIN_ROW - 1; i < MAX_ROW; i++) {
                     const rowData = values[i] || [];
-                    // Verificar si la celda está vacía en local values
+                    // Verificar si la celda G está vacía
                     if (!rowData[6] || rowData[6].trim() === '') {
-                        rowIndex = i;
                         const rowNumber = i + 1;
                         const concepto = entry.name;
                         const importe = entry.amount;
-                        const colH = rowData[7] || ''; // Mantener columna H intacta
 
-                        targetRange = `${sheetName}!G${rowNumber}:I${rowNumber}`;
-                        targetValues = [[concepto, colH, importe]];
-                        foundInFijos = true;
+                        targetRange = `${sheetName}!G${rowNumber}:H${rowNumber}`;
+                        targetValues = [[concepto, importe]];
+                        foundRow = true;
 
                         // ACTUALIZAR local values para que la siguiente iteración sepa que esta fila está ocupada
                         if (!values[i]) values[i] = [];
-                        values[i][6] = concepto; // Marcar como ocupado
-                        values[i][8] = importe;
+                        values[i][6] = concepto;
+                        values[i][7] = importe;
                         break;
                     }
                 }
 
-                // --- INTENTO 2: SECTION "GASTOS EXTRA" (Columna K, L) (FALLBACK) ---
-                if (!foundInFijos) {
-                    for (let i = MIN_ROW - 1; i < MAX_ROW; i++) {
-                        const rowData = values[i] || [];
-                        if (!rowData[10] || rowData[10].trim() === '') {
-                            rowIndex = i;
-                            const rowNumber = i + 1;
-                            targetRange = `${sheetName}!K${rowNumber}:L${rowNumber}`;
-                            targetValues = [[entry.name, entry.amount]];
-
-                            // ACTUALIZAR local values
-                            if (!values[i]) values[i] = [];
-                            values[i][10] = entry.name; // Marcar ocupado
-                            values[i][11] = entry.amount;
-                            break;
-                        }
-                    }
-                }
-
-                if (targetRange && targetValues) {
+                if (foundRow && targetRange && targetValues) {
                     batchData.push({
                         range: targetRange,
                         values: targetValues
@@ -128,7 +105,7 @@ export class GoogleSheetsManager {
         }
     }
 
-    async getSheetData(sheetId, sheetName, range = 'A1:M100') {
+    async getSheetData(sheetId, sheetName, range = 'A1:H120') {
         try {
             showSpinner(true);
 
@@ -154,6 +131,65 @@ export class GoogleSheetsManager {
             showSpinner(false);
             console.error('Sheets Error:', error);
             showToast(`Error al leer datos: ${error.message}`, 'error');
+            throw error;
+        }
+    }
+
+    async getSpreadsheetTabs(spreadsheetId) {
+        try {
+            showSpinner(true);
+            const url = `${this.baseUrl}/${spreadsheetId}?fields=sheets.properties.title`;
+
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `Bearer ${this.accessToken}`
+                }
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error?.message || 'Error al obtener tabs');
+            }
+
+            const data = await response.json();
+            showSpinner(false);
+
+            return data.sheets.map(sheet => sheet.properties.title);
+        } catch (error) {
+            showSpinner(false);
+            console.error('Sheets Error:', error);
+            showToast(`Error al leer tabs: ${error.message}`, 'error');
+            throw error;
+        }
+    }
+
+    async copyFile(fileId, newTitle) {
+        try {
+            showSpinner(true);
+            const url = `https://www.googleapis.com/drive/v3/files/${fileId}/copy`;
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    name: newTitle
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error?.message || 'Error al copiar archivo');
+            }
+
+            const data = await response.json();
+            showSpinner(false);
+            return data.id;
+        } catch (error) {
+            showSpinner(false);
+            console.error('Drive Error:', error);
+            showToast(`Error al clonar sheet: ${error.message}`, 'error');
             throw error;
         }
     }

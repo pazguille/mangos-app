@@ -27,7 +27,7 @@ export class GoogleAuthManager {
                 // Initialize Token Client
                 this.tokenClient = google.accounts.oauth2.initTokenClient({
                     client_id: this.CLIENT_ID,
-                    scope: 'https://www.googleapis.com/auth/spreadsheets openid profile email',
+                    scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly openid profile email',
                     callback: (response) => this._handleTokenResponse(response),
                 });
 
@@ -107,7 +107,7 @@ export class GoogleAuthManager {
         }
 
         updateAuthUI();
-        if (window.app) window.app._updateGreeting();
+        if (window.app && window.app._handleAuthChange) window.app._handleAuthChange();
     }
 
     async _fetchUserInfo(token) {
@@ -122,7 +122,7 @@ export class GoogleAuthManager {
                 localStorage.setItem('mangos_user_name', name);
                 localStorage.setItem('mangos_user_email', data.email);
                 console.log(`👤 Usuario obtenido: ${name} (${data.email})`);
-                if (window.app) window.app._updateGreeting();
+                if (window.app && window.app._handleAuthChange) window.app._handleAuthChange();
             }
         } catch (e) {
             console.warn('⚠️ No se pudo obtener info del usuario:', e);
@@ -166,7 +166,7 @@ export class GoogleAuthManager {
                 `client_id=${this.CLIENT_ID}&` +
                 `redirect_uri=${rootUrl}&` +
                 `response_type=token&` +
-                `scope=https://www.googleapis.com/auth/spreadsheets openid profile email&` +
+                `scope=https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly openid profile email&` +
                 `include_granted_scopes=true&` +
                 `state=oauth_redirect`;
 
@@ -260,41 +260,34 @@ export async function initializeAuth() {
 export function updateAuthUI() {
     console.log('🎨 Actualizando UI...');
     const settingsBtn = document.getElementById('settingsBtn');
-    const headerActions = document.querySelector('.header-actions');
 
-    if (!headerActions) {
-        console.error('❌ No encontré .header-actions');
-        return;
-    }
-
+    // Check if user is signed in
     if (authManager && authManager.isSignedIn()) {
         console.log('✅ Usuario autenticado');
         if (settingsBtn) settingsBtn.disabled = false;
 
-        // Quitar botón de Google Sign-In si existe
-        const googleSignInContainer = document.getElementById('googleSignInContainer');
-        if (googleSignInContainer) googleSignInContainer.remove();
+        // Hide Welcome, Show App is handled by app.js on init/change
+        // But we should remove the button if it exists to be clean
+        const container = document.getElementById('googleSignInContainer');
+        if (container) container.innerHTML = '';
 
         console.log(`✅ Conectado como: ${authManager.getUserEmail()}`);
     } else {
         console.log('❌ Usuario NO autenticado');
         if (settingsBtn) settingsBtn.disabled = false;
 
-        // Renderizar Google Sign-In Button si no existe
-        if (!document.getElementById('googleSignInContainer')) {
+        // Render Google Sign-In Button in the new container
+        const container = document.getElementById('googleSignInContainer');
+        if (container && container.innerHTML.trim() === '') {
             console.log('Creando botón de Google Sign-In');
-            const container = document.createElement('div');
-            container.id = 'googleSignInContainer';
-            container.style.display = 'inline-block';
-            headerActions.insertBefore(container, headerActions.firstChild);
 
-            // Renderizar un botón custom de Google (más confiable para redirección manual)
+            // Renderizar un botón custom de Google
             container.innerHTML = `
-                <button class="btn-neo" style="padding: 8px 16px; font-size: 0.8rem; border-radius: 40px; background: white; color: var(--text-main); border: 1px solid var(--border-strong);">
-                    <svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg">
+                <button class="btn-neo" style="background: #fff; color: #111; padding: 12px 24px; font-size: 1rem; border-radius: 50px; border: 1px solid #e0e0e0; width: auto; min-width: 240px;">
+                    <svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
                         <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.26.81-.58z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 12-4.53z" fill="#EA4335"/>
                     </svg>
-                    Ingresar
+                    Ingresar con Google
                 </button>
             `;
 
@@ -303,7 +296,7 @@ export function updateAuthUI() {
                 authManager.requestAccessToken();
             });
 
-            console.log('✅ Botón custom de Google renderizado');
+            console.log('✅ Botón custom de Google renderizado en Welcome Section');
         }
 
         console.log('⚠️ Usuario no autenticado');

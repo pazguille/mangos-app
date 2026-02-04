@@ -33,13 +33,6 @@ export function showSpinner(show) {
         else if (lastClickedBtn && lastClickedBtn.isConnected && lastClickedBtn.id !== 'settingsBtn') {
             target = lastClickedBtn;
         }
-        // 3. Fallback: Botón principal de la pestaña activa (ej: disparado por voz o Ctrl+Enter)
-        else {
-            const activeTab = document.querySelector('.tab-content.active');
-            if (activeTab) {
-                target = activeTab.querySelector('button.btn-neo');
-            }
-        }
 
         if (target) target.classList.add('loading');
     } else {
@@ -94,4 +87,10 @@ export function typeText(id, text, speed) {
     }
   }
   loop();
+}
+
+export function getCurrentMonthName() {
+    const formatter = new Intl.DateTimeFormat('es-ES', { month: 'long' });
+    const month = formatter.format(new Date());
+    return month.charAt(0).toUpperCase() + month.slice(1);
 }

@@ -4,8 +4,10 @@ import { getGeminiProcessor } from './gemini.js';
 import { getOpenRouterProcessor } from './openrouter.js';
 import { getSheetsManager } from './sheets.js';
 import { voiceRecorder, initVoiceRecorder } from './voice.js';
-import { showToast, pick, typeText } from './utils.js';
+import { showToast, pick, typeText, getCurrentMonthName } from './utils.js';
 import { PullToRefresh } from './pull-to-refresh.js';
+import { getPageFromURL } from './router.js';
+import { SheetView } from './sheet-view.js';
 
 // Main Application Logic
 class mangosApp {
@@ -15,13 +17,12 @@ class mangosApp {
         this.longPressTimer = null;
         this.isLongPress = false;
         this.longPressThreshold = 300; // milliseconds
+        this.sheetView = null;
         this.init();
     }
 
     async init() {
         this._setupEventListeners();
-        this._checkConfiguration();
-        this._updateGreeting();
 
         // Register Service Worker for PWA
         this._registerServiceWorker();
@@ -31,6 +32,35 @@ class mangosApp {
 
         // Initialize Voice Recorder UI
         initVoiceRecorder();
+
+        // Initialize Routing
+        const { page, id } = getPageFromURL(window.location.href);
+        if (page && page !== 'home') {
+            this.showPage(page, id);
+        } else {
+            // Initial load of home: trigger entrance animation
+            const $home = document.getElementById('home');
+            const $currentMonth = document.querySelector('.badge-current-month');
+            try {
+                $currentMonth.textContent = JSON.parse(window.localStorage.getItem('mangos_config')).sheetName;
+            } catch (e) {
+                $currentMonth.textContent = getCurrentMonthName();
+            }
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    console.log('Home loaded');
+                    document.body.classList.add('loaded');
+                    $home.classList.add('home--loaded');
+                    // Typing effect is now handled by _showMainApp()
+                });
+            });
+        }
+
+        window.addEventListener('popstate', (eve) => {
+            const { page, id } = getPageFromURL(window.location.href);
+            const isBack = eve.state?.isBack || page === 'home';
+            this.showPage(page, id, isBack);
+        });
 
         // Initialize Pull-to-Refresh
         this.pullToRefresh = new PullToRefresh({
@@ -48,6 +78,7 @@ class mangosApp {
             if (typeof google !== 'undefined' && google.accounts) {
                 clearInterval(checkGoogle);
                 await initializeAuth();
+                this._handleAuthChange();
             }
         }, 300);
 
@@ -72,10 +103,254 @@ class mangosApp {
         }
     }
 
+    async showPage(page, id, isBack = false) {
+        if (!page) { page = 'home'; }
+
+        let $prevPage = document.querySelector('.page-on');
+        const $currentPage = document.getElementById(page);
+
+        // If no page is "on", then the current visible thing must be home (if we are moving away from it)
+        if (!$prevPage && page !== 'home') {
+            $prevPage = document.getElementById('home');
+        }
+
+        if (!$currentPage) {
+            console.warn(`Page ${page} not found, redirecting to home`);
+            return this.showPage('home');
+        }
+
+        // Special handling for Home visibility
+        if (page === 'home') {
+            $currentPage.hidden = false;
+        }
+
+        if ($prevPage && $prevPage !== $currentPage) {
+            if (isBack) {
+                // Going back: Current page comes from the left (-80px) to 0 (z-index 5)
+                // Previous page slides out to the right (z-index 10)
+
+                $currentPage.classList.remove('page-on', 'page-off-right');
+                $currentPage.classList.add('page-prev-on'); // at -80px (z-index 2)
+                $currentPage.hidden = false;
+
+                // Force reflow and wait for a frame
+                $currentPage.offsetHeight;
+
+                setTimeout(() => {
+                    $prevPage.classList.remove('page-on');
+                    $prevPage.classList.add('page-off-right'); // slides to 100% (z-index 10)
+
+                    $currentPage.classList.remove('page-prev-on');
+                    $currentPage.classList.add('page-on'); // slides to 0 (z-index 5)
+                }, 20); // Small delay is often more reliable than rAF for transitions
+
+                setTimeout(() => {
+                    $prevPage.classList.remove('page-off-right');
+                    $prevPage.hidden = true;
+                }, 320);
+            } else {
+                // Going forward: Current page comes from the right (100%) to 0
+                // Previous page slides to the left (0 to -80px)
+
+                $prevPage.classList.add('page-prev-on'); // Slides to -80px
+                $prevPage.classList.remove('page-on');
+
+                $currentPage.classList.remove('page-prev-on'); // Ensure it's not at -80px
+                $currentPage.hidden = false;
+                $currentPage.offsetHeight; // Force reflow
+                $currentPage.classList.add('page-on'); // Slides to 0
+
+                setTimeout(() => {
+                    // We keep .page-prev-on so it stays at -80px in the background
+                    $prevPage.hidden = true;
+                }, 300);
+            }
+        } else {
+            // Initial load or same page
+            $currentPage.hidden = false;
+            $currentPage.classList.add('page-on');
+        }
+
+        // Page specific logic
+        if (page === 'sheet') {
+            if (!this.sheetView) {
+                this.sheetView = new SheetView();
+            } else {
+                this.sheetView.loadData();
+            }
+        }
+    }
+
+    // --- Onboarding & Auth State Machine ---
+
+    _handleAuthChange() {
+        console.log('🔄 Auth State Changed. Checking flow...');
+        const isSignedIn = authManager.isSignedIn();
+        const expiry = new Date(authManager.tokenExpiry);
+        const tokenExpired = new Date() > expiry;
+
+        if (tokenExpired) {
+            console.log('🔄 Token Expired. Requesting Access Token...');
+            authManager.requestAccessToken(true);
+            this._showMainApp();
+            this._checkConfiguration(); // Run background checks (month update)
+            return;
+        }
+
+        if (isSignedIn) {
+            if (config.isConfigured()) {
+                console.log('✅ User signed in & configured -> Main App');
+                this._showMainApp();
+                this._checkConfiguration(); // Run background checks (month update)
+            } else {
+                console.log('✨ User signed in but NOT configured -> Start Onboarding');
+                this._startOnboardingFlow();
+            }
+        } else {
+            console.log('👋 User not signed in -> Welcome Screen');
+            this._showWelcomeScreen();
+        }
+    }
+
+    _showWelcomeScreen() {
+        // Show mainApp container first
+        document.getElementById('mainApp').style.display = 'block';
+        // Show welcome, hide others
+        document.getElementById('welcomeSection').style.display = 'flex';
+        document.getElementById('onboardingLoader').style.display = 'none';
+        document.getElementById('home').style.display = 'none';
+    }
+
+    _showMainApp() {
+        // Show mainApp container
+        document.getElementById('mainApp').style.display = 'block';
+        // Hide welcome and loader
+        document.getElementById('welcomeSection').style.display = 'none';
+        document.getElementById('onboardingLoader').style.display = 'none';
+
+        const home = document.getElementById('home');
+        if (home.style.display === 'none') {
+            home.style.display = 'flex'; // Show home
+            // Trigger entrance animation
+        }
+        requestAnimationFrame(() => {
+            document.body.classList.add('loaded');
+            this._setupGreeting();
+            this._typeGreetingSubtitle();
+
+            // Show enhanced hint for first-time users
+            if (localStorage.getItem('mangos_first_run') === 'true') {
+                this._showFirstRunHint();
+                localStorage.removeItem('mangos_first_run');
+            }
+        });
+    }
+
+    _showFirstRunHint() {
+        const hintEl = document.getElementById('voiceHint');
+        if (hintEl) {
+            // Make hint more prominent temporarily
+            hintEl.style.fontSize = '0.85rem';
+            hintEl.style.fontWeight = '600';
+            hintEl.style.opacity = '0.8';
+
+            // Reset to normal after 5 seconds
+            setTimeout(() => {
+                hintEl.style.fontSize = '';
+                hintEl.style.fontWeight = '';
+                hintEl.style.opacity = '';
+            }, 5000);
+        }
+    }
+
+    async _startOnboardingFlow() {
+        // Show mainApp container and loader
+        document.getElementById('mainApp').style.display = 'block';
+        document.getElementById('welcomeSection').style.display = 'none';
+        document.getElementById('home').style.display = 'none';
+        document.getElementById('onboardingLoader').style.display = 'flex';
+
+        const statusEl = document.getElementById('onboardingStatus');
+
+        try {
+            const manager = getSheetsManager();
+            if (!manager) throw new Error('Auth failed during onboarding');
+
+            // 1. Clone Template
+            statusEl.textContent = 'Creando tu sheet personal...';
+            const TEMPLATE_ID = '17EqSTyy0Ey5aX3IJm1T1_6mPDlx5NNT9-PVOmWz_z6E';
+            const date = new Date().toISOString().split('T')[0];
+            const newTitle = `Mangos - ${date}`;
+
+            const newFileId = await manager.copyFile(TEMPLATE_ID, newTitle);
+
+            if (!newFileId) throw new Error('Failed to create file');
+
+            // 2. Configure App
+            statusEl.textContent = 'Configurando aplicación...';
+            config.sheetId = newFileId;
+            // Default sheet name, will be refined by auto-update later if needed
+            // But we should try to set it correctly now if possible
+            config.sheetName = getCurrentMonthName();
+            config.save();
+
+            // 3. Pre-load tabs (warmup)
+            statusEl.textContent = 'Preparando tu espacio...';
+            await this._loadSheetTabs(newFileId, config.sheetName);
+
+            // 4. Mark as first run for hint display
+            localStorage.setItem('mangos_first_run', 'true');
+
+            // 5. Finish
+            statusEl.textContent = '¡Todo listo!';
+            await new Promise(resolve => setTimeout(resolve, 800)); // Brief pause to show success
+
+            showToast('✅ ¡Todo listo!', 'success');
+
+            // Reload to ensure clean state or just show app
+            // Reload is safer to ensure all singletons bind correctly to new config
+            window.location.reload();
+
+        } catch (error) {
+            console.error('Onboarding Error:', error);
+
+            // More specific error messages
+            let errorMsg = 'Hubo un problema preparando tu cuenta.';
+            if (error.message.includes('Auth')) {
+                errorMsg = 'Error de autenticación. Por favor, intentá iniciar sesión nuevamente.';
+            } else if (error.message.includes('Failed to create')) {
+                errorMsg = 'No pudimos crear tu hoja. Verificá tu conexión e intentá de nuevo.';
+            }
+
+            showToast(errorMsg, 'error');
+
+            // Return to welcome screen for retry
+            setTimeout(() => {
+                this._showWelcomeScreen();
+            }, 2000);
+        }
+    }
+
     _setupEventListeners() {
+        // Global click listener for routing
+        document.body.addEventListener('click', (eve) => {
+            const $link = eve.target.closest('.link');
+            if (!$link) return;
+
+            // Only handle relative links or same-origin links
+            const url = new URL($link.href, window.location.origin);
+            if (url.origin !== window.location.origin) return;
+
+            eve.preventDefault();
+            const { page, id } = getPageFromURL($link.href);
+            const isBack = page === 'home';
+
+            history.pushState({ page, id, isBack: !isBack }, '', $link.href);
+            this.showPage(page, id, isBack);
+        });
         // Unified Input Button - Tap vs Long-Press
         const unifiedBtn = document.getElementById('unifiedInputBtn');
-        const voiceHint = document.getElementById('voiceHint');
+        this.voiceHintEl = document.getElementById('voiceHint');
 
         // Touch events for mobile
         unifiedBtn.addEventListener('touchstart', (e) => this._handlePressStart(e));
@@ -128,6 +403,10 @@ class mangosApp {
         // AI Response Actions
         document.getElementById('confirmBtn').addEventListener('click', () => this._confirmAndSave());
         document.getElementById('rejectBtn').addEventListener('click', () => this._rejectData());
+
+        // Handle Sheet URL changes for dynamic tabs
+        const sheetUrlInput = document.getElementById('sheetUrl');
+        sheetUrlInput.addEventListener('blur', (e) => this._handleSheetUrlChange(e.target.value));
     }
 
     _handlePressStart(e) {
@@ -138,7 +417,7 @@ class mangosApp {
         this.longPressTimer = setTimeout(() => {
             this.isLongPress = true;
             this._startVoiceRecording();
-            voiceHint.classList.add('hidden');
+            if (this.voiceHintEl) this.voiceHintEl.classList.add('hidden');
         }, this.longPressThreshold);
     }
 
@@ -155,7 +434,10 @@ class mangosApp {
         if (this.isLongPress) {
             this._stopVoiceRecording();
             this.isLongPress = false;
-            voiceHint.classList.remove('hidden');
+            // Delay showing hint until orb returns to original size
+            setTimeout(() => {
+                if (this.voiceHintEl) this.voiceHintEl.classList.remove('hidden');
+            }, 500);
         } else {
             // It was a tap - show text input
             this._showTextInput();
@@ -349,14 +631,81 @@ class mangosApp {
         this._clearAIResponse();
     }
 
+    async _handleSheetUrlChange(url) {
+        if (!url) return;
+        const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+        const id = (match && match[1]) ? match[1] : (url.length > 20 && !url.includes('/') ? url : null);
+
+        if (id) {
+            await this._loadSheetTabs(id);
+        }
+    }
+
+    async _loadSheetTabs(spreadsheetId, preselectedName = null) {
+        const select = document.getElementById('sheetName');
+        const loader = document.getElementById('sheetLoading');
+        const manager = getSheetsManager();
+
+        if (!manager) {
+            select.innerHTML = '<option value="" disabled selected>Inicia sesión primero</option>';
+            return;
+        }
+
+        try {
+            select.disabled = true;
+            loader.style.display = 'block';
+            select.innerHTML = '<option value="" disabled selected>Cargando hojas...</option>';
+
+            const tabs = await manager.getSpreadsheetTabs(spreadsheetId);
+
+            if (tabs && tabs.length > 0) {
+                // Filter out 'Informe' sheet
+                const filteredTabs = tabs.filter(tab => tab !== 'Informe');
+
+                if (filteredTabs.length > 0) {
+                    select.innerHTML = filteredTabs.map(tab => `<option value="${tab}">${tab}</option>`).join('');
+                    select.disabled = false;
+
+                    if (preselectedName && filteredTabs.includes(preselectedName)) {
+                        // User has a saved preference, respect it
+                        select.value = preselectedName;
+                    } else {
+                        // First-time setup: auto-select current month if available
+                        const currentMonth = getCurrentMonthName();
+                        if (filteredTabs.includes(currentMonth)) {
+                            select.value = currentMonth;
+                        } else {
+                            select.value = filteredTabs[0];
+                        }
+                    }
+                } else {
+                    select.innerHTML = '<option value="" disabled selected>No hay hojas disponibles para carga</option>';
+                }
+            } else {
+                 select.innerHTML = '<option value="" disabled selected>No se encontraron hojas</option>';
+            }
+
+        } catch (error) {
+            console.error('Error loading tabs:', error);
+            select.innerHTML = '<option value="" disabled selected>Error al cargar hojas</option>';
+        } finally {
+            loader.style.display = 'none';
+        }
+    }
+
+
     _openSettings() {
         const modal = document.getElementById('settingsModal');
 
         // Show current values if they exist
         if (config.sheetId) {
             document.getElementById('sheetUrl').value = `https://docs.google.com/spreadsheets/d/${config.sheetId}/edit`;
+            // Trigger load tabs
+            this._loadSheetTabs(config.sheetId, config.sheetName);
+        } else {
+             document.getElementById('sheetUrl').value = '';
         }
-        document.getElementById('sheetName').value = config.sheetName;
+
         document.getElementById('apiKey').value = config.apiKey;
 
         modal.classList.add('active');
@@ -391,16 +740,31 @@ class mangosApp {
         setTimeout(() => window.location.reload(), 500);
     }
 
-    _checkConfiguration() {
+    async _checkConfiguration() {
         if (!config.isConfigured()) {
             console.warn('⚠️ Configuración incompleta');
+            return;
+        }
+        // Configuration is valid, no auto-switching
+    }
+
+    _setupGreeting() {
+        const name = localStorage.getItem('mangos_user_name');
+        const greetingEl = document.getElementById('userGreeting');
+        const subtitleEl = document.getElementById('greetingText');
+
+        if (subtitleEl) subtitleEl.textContent = ''; // Ensure it's empty before typing
+        if (!greetingEl) return;
+
+        let greeting = 'Hola';
+        if (name && name !== 'Hola') {
+            greetingEl.textContent = `${greeting}, ${name}`;
+        } else {
+            greetingEl.textContent = `${greeting}`;
         }
     }
 
-    _updateGreeting() {
-        const name = localStorage.getItem('mangos_user_name');
-        const greetingEl = document.getElementById('userGreeting');
-
+    _typeGreetingSubtitle() {
         const greetings = [
             '¿Cuántos gastaste?',
             'Decime cuántos y lo sumamos.',
@@ -409,16 +773,6 @@ class mangosApp {
         ];
 
         typeText('greetingText', pick(greetings), 15);
-
-        if (!greetingEl) return;
-
-        let greeting = 'Hola';
-
-        if (name && name !== 'Hola') {
-            greetingEl.textContent = `${greeting}, ${name}`;
-        } else {
-            greetingEl.textContent = `${greeting}`;
-        }
     }
 }
 

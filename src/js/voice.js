@@ -221,17 +221,11 @@ export class VoiceRecorder {
 
     _updateUI(state) {
         const container = document.querySelector('.voice-nexus');
-        // const startBtn = document.getElementById('startVoiceBtn');
 
         if (state === 'recording') {
             container.classList.add('recording');
-            // startBtn.classList.add('hidden');
-
         } else if (state === 'stopped' || state === 'error') {
             container.classList.remove('recording');
-
-            // Toggle visibility back
-            // startBtn.classList.remove('hidden');
         }
     }
 }
@@ -239,15 +233,5 @@ export class VoiceRecorder {
 export const voiceRecorder = new VoiceRecorder();
 
 export function initVoiceRecorder() {
-    if (!voiceRecorder.supported) {
-        const voiceTab = document.getElementById('voice-tab');
-        if (voiceTab) {
-            voiceTab.innerHTML = `
-                <div style="padding: 20px; text-align: center; color: var(--text-secondary);">
-                    <p>⚠️ Web Speech API no está disponible en tu navegador.</p>
-                    <p>Por favor usa Firefox, Chrome, Edge o Safari.</p>
-                </div>
-            `;
-        }
-    }
+    // Basic checks for support if needed in the future
 }
