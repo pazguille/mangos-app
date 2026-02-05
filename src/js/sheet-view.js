@@ -71,12 +71,12 @@ export class SheetView {
 
             if (hasDisponibleData) {
                 cardDisponible.style.display = 'block';
-                document.getElementById('val-disponible').textContent = disponible;
+                document.getElementById('val-disponible').querySelector('.value-real').textContent = disponible;
             } else {
                 cardDisponible.style.display = 'none';
             }
 
-            document.getElementById('val-gastado').textContent = gastado;
+            document.getElementById('val-gastado').querySelector('.value-real').textContent = gastado;
 
             // Render Table (start from row 12 for expenses)
             const expenseRows = data.slice(11);

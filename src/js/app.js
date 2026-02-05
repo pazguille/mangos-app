@@ -18,6 +18,10 @@ class mangosApp {
         this.isLongPress = false;
         this.longPressThreshold = 300; // milliseconds
         this.sheetView = null;
+
+        // Enable :active states on iOS/Safari
+        document.body.addEventListener('touchstart', () => {}, {passive: true});
+
         this.init();
     }
 
@@ -29,6 +33,9 @@ class mangosApp {
 
         // Initialize Google Auth
         await this._initGoogleAuth();
+
+        // Initialize Visibility State
+        this._updateVisibilityUI();
 
         // Initialize Voice Recorder UI
         initVoiceRecorder();
@@ -402,6 +409,9 @@ class mangosApp {
         // Setup Choices
         document.getElementById('setupExistingBtn').addEventListener('click', () => this._openSettings());
         document.getElementById('setupCreateBtn').addEventListener('click', () => this._startOnboardingFlow());
+
+        // Visibility Toggle
+        document.getElementById('visibilityToggleBtn').addEventListener('click', () => this._toggleVisibility());
 
         // Modal controls
         const modal = document.getElementById('settingsModal');
@@ -792,6 +802,40 @@ class mangosApp {
         ];
 
         typeText('greetingText', pick(greetings), 15);
+    }
+
+    _toggleVisibility() {
+        const currentHidden = localStorage.getItem('mangos_values_hidden') === 'true';
+        localStorage.setItem('mangos_values_hidden', !currentHidden);
+        this._updateVisibilityUI();
+    }
+
+    _updateVisibilityUI() {
+        let isHidden = localStorage.getItem('mangos_values_hidden');
+
+        // Default to true (hidden) if not set
+        if (isHidden === null) {
+            isHidden = 'true';
+            localStorage.setItem('mangos_values_hidden', 'true');
+        }
+
+        isHidden = isHidden === 'true';
+        const eyeOpen = document.getElementById('eyeOpenIcon');
+        const eyeClosed = document.getElementById('eyeClosedIcon');
+
+        // These elements might not be present on initial load if we are on a different page
+        // but they are present in index.html which is always loaded.
+        if (!eyeOpen || !eyeClosed) return;
+
+        if (isHidden) {
+            document.body.classList.add('values-hidden');
+            eyeOpen.classList.add('hidden');
+            eyeClosed.classList.remove('hidden');
+        } else {
+            document.body.classList.remove('values-hidden');
+            eyeOpen.classList.remove('hidden');
+            eyeClosed.classList.add('hidden');
+        }
     }
 }
 
