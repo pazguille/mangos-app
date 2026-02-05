@@ -1059,3 +1059,15 @@ textarea {
     font-weight: 600;
     margin-right: 8px;
 }
+
+
+/* Responsive */
+@media (min-width: 54em) {
+    .home {
+        height: 100vh;
+    }
+
+    .table-bento-container {
+        height: calc(100vh - 130px);
+    }
+}
