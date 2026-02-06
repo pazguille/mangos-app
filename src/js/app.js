@@ -45,7 +45,7 @@ class mangosApp {
         if (page && page !== 'home') {
             this.showPage(page, id);
         } else {
-            // Initial load of home: trigger entrance animation
+            // Initial load of home: setup basic UI
             const $home = document.getElementById('home');
             const $currentMonth = document.querySelector('.badge-current-month');
             try {
@@ -53,14 +53,6 @@ class mangosApp {
             } catch (e) {
                 $currentMonth.textContent = getCurrentMonthName();
             }
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    console.log('Home loaded');
-                    document.body.classList.add('loaded');
-                    $home.classList.add('home--loaded');
-                    // Typing effect is now handled by _showMainApp()
-                });
-            });
         }
 
         window.addEventListener('popstate', (eve) => {
@@ -249,13 +241,24 @@ class mangosApp {
         document.getElementById('onboardingLoader').style.display = 'none';
         document.getElementById('setupChoiceSection').style.display = 'none';
 
-        const home = document.getElementById('home');
-        if (home.style.display === 'none') {
-            home.style.display = 'flex'; // Show home
-            // Trigger entrance animation
+        const $home = document.getElementById('home');
+        if ($home.style.display === 'none') {
+            // Ensure it has the entering class first
+            $home.classList.remove('home--loaded');
+            $home.classList.add('home--entering');
+            $home.style.display = 'flex'; // Show home
+
+            // Force a reflow so the browser recognizes the display: flex
+            // and the 'entering' state before we swap classes
+            $home.offsetHeight;
         }
+
         requestAnimationFrame(() => {
+            // Trigger entrance animation
+            $home.classList.remove('home--entering');
+            $home.classList.add('home--loaded');
             document.body.classList.add('loaded');
+
             this._setupGreeting();
             this._typeGreetingSubtitle();
 
