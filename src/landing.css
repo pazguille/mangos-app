@@ -367,3 +367,118 @@
         align-items: center;
     }
 }
+/* Wizard Specifics */
+.wizard-modal {
+    max-width: 480px;
+    padding: 40px;
+    position: relative;
+}
+
+.wizard-form h2 {
+    font-size: 1.8rem;
+    margin-bottom: 24px;
+    line-height: 1.2;
+}
+
+.wizard-step {
+    display: none;
+    animation: fadeInStep 0.4s ease forwards;
+}
+
+.wizard-step.active {
+    display: block;
+}
+
+@keyframes fadeInStep {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.wizard-step input[type="text"],
+.wizard-step input[type="email"] {
+    width: 100%;
+    border-radius: 0;
+    border: none;
+    border-bottom: 2px solid #eee;
+    font-size: 1.1rem;
+    font-family: inherit;
+    transition: 0.2s;
+}
+
+.wizard-step input:focus {
+    border-color: var(--mangos);
+    outline: none;
+    background: #fff;
+}
+
+.options-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+}
+
+.option-card {
+    cursor: pointer;
+    position: relative;
+}
+
+.option-card input {
+    position: absolute;
+    opacity: 0;
+}
+
+.option-card span {
+    display: block;
+    padding: 16px;
+    background: #f9f9f9;
+    border: 2px solid transparent;
+    border-radius: 16px;
+    font-weight: 600;
+    transition: 0.2s;
+    text-align: center;
+}
+
+.option-card input:checked + span {
+    background: #fff;
+    border-color: var(--mangos);
+    color: var(--mangos);
+}
+
+.wizard-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 40px;
+    gap: 16px;
+}
+
+.wizard-actions .btn-neo {
+    flex: 1;
+}
+
+.btn-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    opacity: 0.3;
+    transition: 0.2s;
+}
+
+.btn-close:hover { opacity: 1; }
+
+.success-content {
+    text-align: center;
+}
+
+.success-content h2 { margin-bottom: 8px; }
+.success-content p { color: #666; margin-bottom: 32px; }
+
+@media (min-width: 54em) {
+    .options-grid {
+        grid-template-columns: 1fr 1fr 1fr;
+    }
+}
