@@ -8,6 +8,6 @@ document.addEventListener('click', (eve) => {
   }
 });
 
-document.getElementById('unifiedInputBtn').addEventListener('touchend', (eve) => {
-  haptics.trigger();
-});
+// document.getElementById('unifiedInputBtn').addEventListener('touchend', (eve) => {
+//   requestIdleCallback(() => haptics.trigger());
+// });
