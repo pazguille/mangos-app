@@ -289,7 +289,35 @@
             </filter>
         </defs>
     </svg>
+    <script>
+        window.requestIdleCallback = window.requestIdleCallback || function (cb) {
+            var start = Date.now();
+            return setTimeout(function () {
+                cb({
+                    didTimeout: false,
+                    timeRemaining: function () {
+                        return Math.max(0, 50 - (Date.now() - start));
+                    }
+                });
+            }, 1);
+        };
 
+        function postTask(task, opts) {
+            return task && scheduler.postTask(task, opts);
+        }
+
+        function yieldToMain(task) {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    task && task();
+                    resolve();
+                }, 0);
+            });
+        }
+
+        window.postTask = postTask;
+        window.yieldToMain = yieldToMain;
+    </script>
     <script type="module" src="src/js/app.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </body>
