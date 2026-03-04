@@ -9,6 +9,10 @@
     --mangos: #f99b41;
 }
 
+svg {
+    pointer-events: none;
+}
+
 .landing-body {
     background-color: var(--landing-bg);
     color: var(--landing-text);

@@ -67,6 +67,10 @@ class mangosApp {
             threshold: 65,
             onRefresh: () => window.location.reload()
         });
+
+        requestIdleCallback(() => {
+            import('./haptics.js');
+        });
     }
 
     async _initGoogleAuth() {
